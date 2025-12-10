@@ -27,6 +27,7 @@ dddguard
 The tool will guide you through scanning, linting, or creating new components.
 
 Capabilities
+
 🛡️ Lint
 Command: dddguard lint
 
@@ -101,20 +102,18 @@ src/
 3.  **`<context_name>/`**: Represents a Bounded Context, a self-contained module with its own internal layers:
     -   **`domain/`**: The heart of the context's business logic. It is completely isolated and pure.
     -   **`app/`**: Orchestrates the domain logic to perform specific tasks, defining the application's capabilities.
-    -   **`adapters/`**: Translate between the outside world and the application layer, implementing interfaces defined in `app/`.
+    -   **`adapters/`**: Translate between the outside world and the application layer, implementing interfaces defined in `app/` or triggering `app/` logic.
     -   **`dto/`**: Define the data contracts for requests and responses, ensuring clean boundaries.
     -   **`ports/`**: Contain the raw, technology-specific code that connects to infrastructure.
     -   **`composition.py`**: The context's local "glue" that wires together its internal components.
 
-Technology
-Built with modern Python standards:
+## Technology Stack
 
-Typer for the CLI.
+The project is built with modern Python tooling and development practices:
 
-Dishka for Dependency Injection.
+- **Typer** + **Rich**  + **InquirerPy**   best smooth CLI experience.
+- **Dishka**  lightweight Dependency Injection for clean and decoupled architecture.
 
-Rich for beautiful terminal output.
+---
 
-NetworkX for graph analysis.
-
-Maintained by Sense1Tapo4ek
+**Maintained by**: **Sense1Tapo4ek**

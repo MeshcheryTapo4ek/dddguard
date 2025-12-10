@@ -86,7 +86,7 @@ class VisualizerSettingsWizard:
         grid.add_column(style="bold white")
         
         grid.add_row("Format:", "Draw.io XML")
-        grid.add_row("Engine:", "NetworkX + Rich")
+        grid.add_row("Engine:", "Rich")
         grid.add_row("Output File:", f"[{color}]{self.output_file}[/]")
 
         # --- Main Panel ---
