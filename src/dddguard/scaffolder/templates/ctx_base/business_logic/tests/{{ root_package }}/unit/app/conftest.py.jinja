@@ -1,0 +1,38 @@
+import pytest
+from unittest.mock import MagicMock
+
+from {{ root_package }}.app.interfaces import ILogisticsRepository, INotificationGateway
+from {{ root_package }}.domain import (
+    OrderEnt, OrderId, AddressVo, OrderStatus, 
+    CourierEntity, CourierId, CourierStatus, VehicleVo, WeightGrams
+)
+from uuid import uuid4
+
+@pytest.fixture
+def mock_repo():
+    """
+    Mocked Repository to isolate App layer from Data Access.
+    """
+    repo = MagicMock(spec=ILogisticsRepository)
+    return repo
+
+@pytest.fixture
+def mock_notifier():
+    return MagicMock(spec=INotificationGateway)
+
+@pytest.fixture
+def sample_order():
+    return OrderEnt(
+        id=OrderId(uuid4()),
+        address=AddressVo(city="Test", street="St", building="1", zip_code="00"),
+        status=OrderStatus.ASSEMBLING
+    )
+
+@pytest.fixture
+def sample_courier():
+    return CourierEntity(
+        id=CourierId(uuid4()),
+        name="Driver",
+        vehicle=VehicleVo(plate_number="123", model="Car", capacity=WeightGrams(10000)),
+        status=CourierStatus.IDLE
+    )

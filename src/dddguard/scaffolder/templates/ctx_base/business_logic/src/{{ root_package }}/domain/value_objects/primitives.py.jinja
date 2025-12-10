@@ -1,0 +1,21 @@
+from typing import NewType
+from decimal import Decimal
+from uuid import UUID
+
+
+OrderId = NewType("OrderId", UUID)
+CourierId = NewType("CourierId", UUID)
+DeliveryId = NewType("DeliveryId", UUID)
+
+
+MoneyAmount = NewType("MoneyAmount", Decimal)
+WeightGrams = NewType("WeightGrams", Decimal)
+
+
+# Helper to create Money safely
+def mk_money(value: float | str | int) -> MoneyAmount:
+    return MoneyAmount(Decimal(value))
+
+# Helper to create Weight safely
+def mk_weight(value: float | str | int) -> WeightGrams:
+    return WeightGrams(Decimal(value))

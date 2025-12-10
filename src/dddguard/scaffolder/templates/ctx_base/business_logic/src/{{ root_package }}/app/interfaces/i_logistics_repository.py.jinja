@@ -1,0 +1,26 @@
+from typing import Protocol, List, Optional
+from ...domain import (
+    OrderEnt, OrderId, 
+    CourierEntity, CourierId, 
+    Delivery, DeliveryId
+)
+
+
+class ILogisticsRepository(Protocol):
+    """
+    Combined repository interface for the context.
+    In real apps, you might split this into IOrderRepo, ICourierRepo, etc.
+    """
+    # --- Orders ---
+    def save_order(self, order: OrderEnt) -> None: ...
+    def get_order(self, order_id: OrderId) -> Optional[OrderEnt]: ...
+    def get_assembled_orders(self) -> List[OrderEnt]: ...
+
+    # --- Couriers ---
+    def save_courier(self, courier: CourierEntity) -> None: ...
+    def get_courier(self, courier_id: CourierId) -> Optional[CourierEntity]: ...
+    def get_idle_couriers(self) -> List[CourierEntity]: ...
+
+    # --- Deliveries ---
+    def save_delivery(self, delivery: Delivery) -> None: ...
+    def get_delivery(self, delivery_id: DeliveryId) -> Optional[Delivery]: ...

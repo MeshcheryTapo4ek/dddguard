@@ -1,0 +1,34 @@
+from typing import List, Optional
+from dishka import make_container, Provider, Scope, provide
+
+# --- Infra & Config ---
+from ..{{ root_package }}.config import get_config, {{ root_package | pascal }}Config
+
+# --- Context Providers ---
+from ..{{ root_package }}.composition import {{ root_package | pascal }}Provider
+
+
+class RootProvider(Provider):
+    scope = Scope.APP
+
+    @provide
+    def provide_config(self) -> {{ root_package | pascal }}Config:
+        return get_config()
+
+
+def initialize_container(extra_providers: Optional[List[Provider]] = None):
+    """
+    Main Composition Root.
+    Assembles all context providers and infra into a single DI container.
+    """
+    providers = [
+        RootProvider(),
+        {{ root_package | pascal }}Provider(),
+    ]
+    
+    if extra_providers:
+        providers.extend(extra_providers)
+
+    container = make_container(*providers)
+    
+    return container

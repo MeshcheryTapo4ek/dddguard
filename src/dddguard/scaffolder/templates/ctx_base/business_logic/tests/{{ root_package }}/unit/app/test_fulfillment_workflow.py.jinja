@@ -1,0 +1,55 @@
+import pytest
+from unittest.mock import Mock, call
+from uuid import uuid4
+
+from {{ root_package }}.app.workflows import FulfillmentWorkflow
+from {{ root_package }}.domain import OrderId
+
+def test_workflow_runs_sequence():
+    """
+    Test that the workflow calls Use Cases in the correct order.
+    We MOCK the Use Cases here, because we are testing the Workflow (Orchestrator),
+    not the Use Cases themselves.
+    """
+    # Arrange
+    create_uc = Mock()
+    fake_id = OrderId(uuid4())
+    create_uc.execute.return_value = fake_id
+    
+    add_item_uc = Mock()
+    assemble_uc = Mock()
+    match_uc = Mock()
+    
+    workflow = FulfillmentWorkflow(
+        create_uc=create_uc,
+        add_item_uc=add_item_uc,
+        assemble_uc=assemble_uc,
+        match_uc=match_uc
+    )
+    
+    items_data = [
+        {"name": "A", "price": 10, "weight": 5, "qty": 1},
+        {"name": "B", "price": 20, "weight": 2, "qty": 3}
+    ]
+    
+    # Act
+    result_id = workflow.run_full_cycle(
+        city="City", 
+        street="St", 
+        items=items_data
+    )
+    
+    # Assert
+    assert result_id == fake_id
+    
+    # 1. Check Create
+    create_uc.execute.assert_called_with("City", "St", "1")
+    
+    # 2. Check Items Added (2 calls)
+    assert add_item_uc.execute.call_count == 2
+    
+    # 3. Check Assemble
+    assemble_uc.execute.assert_called_with(fake_id)
+    
+    # 4. Check Match
+    match_uc.execute.assert_called_once()

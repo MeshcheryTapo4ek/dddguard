@@ -1,0 +1,9 @@
+import sys
+from shared import logger_setup, logger as global_logger
+from .config import get_config
+
+config = get_config()
+
+logger_setup.register_context_level("ROOT", config.LOG_LEVEL)
+
+logger = global_logger.bind(context="ROOT")

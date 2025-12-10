@@ -1,0 +1,26 @@
+project:
+  root_dir: "/home/e.mesheryakou/other/dddguard/dddguard"
+  source_dir: "src/dddguard"
+  tests_dir: "tests"
+  docs_dir: "docs"
+
+scanner:
+  # Directories to completely exclude from scanning
+  exclude_dirs:
+    - ".git"
+    - ".venv"
+    - "venv"
+    - "__pycache__"
+    - "node_modules"
+    - "migrations"
+    - "build"
+    - "dist"
+    - ".idea"
+    - ".vscode"
+
+  # Specific files to ignore during analysis
+  ignore_files:
+    - "conftest.py"
+    - "manage.py"
+    - "setup.py"
+    - "__main__.py"

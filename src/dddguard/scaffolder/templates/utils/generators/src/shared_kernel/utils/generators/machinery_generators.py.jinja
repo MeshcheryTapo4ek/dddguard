@@ -1,0 +1,117 @@
+import uuid
+import enum
+from dataclasses import dataclass
+from typing import Optional
+from faker import Faker
+
+fake = Faker()
+
+class VehicleType(enum.StrEnum):
+    CAR = "CAR"
+    MOTORCYCLE = "MOTORCYCLE"
+    TRUCK = "TRUCK"
+    PLANE = "PLANE"
+    CONSTRUCTION = "CONSTRUCTION" # Excavators, cranes
+    FARMING = "FARMING" # Tractors
+
+@dataclass
+class VehicleMock:
+    id: uuid.UUID
+    vin: str
+    vehicle_type: VehicleType
+    brand: str
+    model: str
+    year: int
+    color: str
+    
+    # Specs
+    payload_capacity_kg: int
+    seats: int
+    fuel_type: str
+    max_speed_kmh: int
+    
+    # Meta
+    is_operational: bool
+    mileage_km: int
+
+def generate_vehicle(vehicle_type: Optional[VehicleType] = None, **overrides) -> VehicleMock:
+    """
+    Generates a vehicle with realistic specs based on its type.
+    """
+    if not vehicle_type:
+        vehicle_type = fake.random_element(list(VehicleType))
+
+    # --- Type Specific Logic ---
+    if vehicle_type == VehicleType.CAR:
+        brand = fake.vehicle_make()
+        model = fake.vehicle_model()
+        payload = fake.random_int(min=300, max=600)
+        seats = fake.random_int(min=2, max=7)
+        max_speed = fake.random_int(min=150, max=250)
+        fuel = fake.random_element(["Gasoline", "Diesel", "Electric", "Hybrid"])
+        
+    elif vehicle_type == VehicleType.MOTORCYCLE:
+        brand = fake.random_element(["Yamaha", "Honda", "Ducati", "Kawasaki", "Harley-Davidson"])
+        model = f"Model-{fake.random_int(100, 1000)}"
+        payload = fake.random_int(min=100, max=200)
+        seats = fake.random_int(min=1, max=2)
+        max_speed = fake.random_int(min=120, max=300)
+        fuel = "Gasoline"
+
+    elif vehicle_type == VehicleType.TRUCK:
+        brand = fake.random_element(["Volvo", "Scania", "MAN", "Mercedes-Benz", "Mack"])
+        model = f"Hauler {fake.random_int(1000, 5000)}"
+        payload = fake.random_int(min=5000, max=25000) # Heavy load
+        seats = fake.random_int(min=2, max=3)
+        max_speed = fake.random_int(min=90, max=120)
+        fuel = "Diesel"
+
+    elif vehicle_type == VehicleType.PLANE:
+        brand = fake.random_element(["Boeing", "Airbus", "Cessna", "Embraer"])
+        model = f"{fake.random_int(100, 900)}-{fake.random_uppercase_letter()}"
+        payload = fake.random_int(min=2000, max=100000)
+        seats = fake.random_int(min=4, max=500)
+        max_speed = fake.random_int(min=300, max=950)
+        fuel = "Jet Fuel"
+
+    elif vehicle_type == VehicleType.CONSTRUCTION:
+        brand = fake.random_element(["Caterpillar", "Komatsu", "JCB", "Hitachi"])
+        model = fake.random_element(["Excavator X", "Loader Y", "Crane Z"])
+        payload = fake.random_int(min=1000, max=10000) # Lift capacity
+        seats = 1
+        max_speed = fake.random_int(min=20, max=60)
+        fuel = "Diesel"
+        
+    else: # Farming or Fallback
+        brand = "John Deere"
+        model = "Tractor"
+        payload = 2000
+        seats = 1
+        max_speed = 40
+        fuel = "Diesel"
+
+    # --- Common Defaults ---
+    defaults = {
+        "id": uuid.uuid4(),
+        "vin": fake.vin(),
+        "vehicle_type": vehicle_type,
+        "brand": brand,
+        "model": model,
+        "year": int(fake.year()),
+        "color": fake.color_name(),
+        
+        "payload_capacity_kg": payload,
+        "seats": seats,
+        "fuel_type": fuel,
+        "max_speed_kmh": max_speed,
+        
+        "is_operational": fake.boolean(chance_of_getting_true=90),
+        "mileage_km": fake.random_int(min=0, max=300000)
+    }
+
+    data = {**defaults, **overrides}
+    return VehicleMock(**data)
+
+def generate_transport_fleet(count: int = 5, vehicle_type: VehicleType = VehicleType.TRUCK) -> list[VehicleMock]:
+    """Helper to generate a list of similar vehicles."""
+    return [generate_vehicle(vehicle_type=vehicle_type) for _ in range(count)]

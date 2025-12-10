@@ -1,0 +1,59 @@
+import pytest
+from uuid import uuid4
+from decimal import Decimal
+
+from {{ root_package }}.domain import (
+    Delivery, DeliveryId, DeliveryStatus,
+    OrderModificationError, InvalidDeliveryStateError, DeliveryCompletenessError,
+    MoneyAmount, CourierStatus
+)
+
+@pytest.fixture
+def delivery_aggregate(order_entity, item_iphone):
+    order_entity.add_item(item_iphone)
+    order_entity.mark_assembled()
+    return Delivery(
+        id=DeliveryId(uuid4()),
+        order=order_entity
+    )
+
+def test_assign_courier_success(delivery_aggregate, courier_entity):
+    # Arrange
+    cost = MoneyAmount(Decimal("100.00"))
+    
+    # Act
+    delivery_aggregate.assign_courier(courier_entity, cost)
+    
+    # Assert
+    assert delivery_aggregate.status == DeliveryStatus.IN_PROGRESS
+    assert delivery_aggregate.courier == courier_entity
+    assert delivery_aggregate.cost == cost
+    assert courier_entity.status == CourierStatus.BUSY
+
+def test_cannot_assign_if_order_not_assembled(order_entity, courier_entity):
+    # Arrange (Order is ASSEMBLING, not ASSEMBLED)
+    delivery = Delivery(id=DeliveryId(uuid4()), order=order_entity)
+    cost = MoneyAmount(Decimal("100.00"))
+    
+    # Act & Assert
+    with pytest.raises(OrderModificationError):
+        delivery.assign_courier(courier_entity, cost)
+
+def test_complete_delivery_success(delivery_aggregate, courier_entity):
+    # Arrange
+    delivery_aggregate.assign_courier(courier_entity, MoneyAmount(100))
+    
+    # Act
+    delivery_aggregate.complete_delivery()
+    
+    # Assert
+    assert delivery_aggregate.status == DeliveryStatus.COMPLETED
+    assert courier_entity.status == CourierStatus.IDLE  # Courier released
+
+def test_cannot_complete_without_courier(delivery_aggregate):
+    # Arrange: Delivery is pending, no courier
+    
+    # Act & Assert
+    with pytest.raises(InvalidDeliveryStateError):
+        # Fails because status is PENDING_MATCHING
+        delivery_aggregate.complete_delivery()

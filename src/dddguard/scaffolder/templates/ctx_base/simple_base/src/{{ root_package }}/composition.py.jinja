@@ -1,0 +1,67 @@
+from dishka import Provider, Scope, provide
+
+# ==============================================================================
+# 1. IMPORTS GENERATION
+# ==============================================================================
+
+# --- Domain ---
+{% if domain_imports %}
+from .domain import {{ domain_imports | join(', ') }}
+{% endif %}
+
+# --- App (Use Cases / Queries) ---
+{% if app_imports %}
+from .app import {{ app_imports | join(', ') }}
+{% endif %}
+
+# --- Ports (Interfaces) ---
+{% if port_imports %}
+from .app.interfaces import {{ port_imports | join(', ') }}
+{% endif %}
+
+# --- Adapters (Driven: Repositories) ---
+{% if adapters_driven_imports %}
+from .adapters.driven import {{ adapters_driven_imports | join(', ') }}
+{% endif %}
+
+# --- Adapters (Driving: Consumers) ---
+{% if adapters_driving_imports %}
+from .adapters.driving import {{ adapters_driving_imports | join(', ') }}
+{% endif %}
+
+# --- Ports (Infrastructure: DB, Clients) ---
+{% if infra_imports %}
+from .ports.driven import {{ infra_imports | join(', ') }}
+{% endif %}
+
+
+# ==============================================================================
+# 2. PROVIDER DEFINITION
+# ==============================================================================
+
+class {{ root_package | pascal }}Provider(Provider):
+    """
+    DI Provider for the '{{ root_package }}' Context.
+    Connects Domain -> App -> Adapters -> Ports.
+    """
+    scope = Scope.APP
+
+    # --------------------------------------------------------------------------
+    # DOMAIN LAYER (Services, Factories)
+    # --------------------------------------------------------------------------
+    {{ domain_providers_code | default('') | indent(4) }}
+
+    # --------------------------------------------------------------------------
+    # APP LAYER (Use Cases, Queries)
+    # --------------------------------------------------------------------------
+    {{ app_providers_code | default('') | indent(4) }}
+
+    # --------------------------------------------------------------------------
+    # ADAPTERS: DRIVEN (Repositories implementing App Interfaces)
+    # --------------------------------------------------------------------------
+    {{ adapters_driven_providers_code | default('') | indent(4) }}
+
+    # --------------------------------------------------------------------------
+    # PORTS: DRIVEN (Infrastructure Clients)
+    # --------------------------------------------------------------------------
+    {{ infra_providers_code | default('') | indent(4) }}

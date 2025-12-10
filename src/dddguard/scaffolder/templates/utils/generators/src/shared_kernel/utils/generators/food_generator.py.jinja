@@ -1,0 +1,41 @@
+import uuid
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import List
+from faker import Faker
+
+# Use standard money generator if available, else simple decimal
+# from .commerce_generators import generate_money, MoneyMock
+
+fake = Faker()
+
+@dataclass
+class FoodItemMock:
+    id: uuid.UUID
+    name: str
+    description: str
+    calories: int
+    ingredients: List[str]
+    cuisine: str
+    price_amount: Decimal
+    is_vegetarian: bool
+    is_spicy: bool
+
+def generate_random_dish(**overrides) -> FoodItemMock:
+    # Faker doesn't have built-in cuisines usually, so we pick randomly
+    cuisines = ["Italian", "Japanese", "Mexican", "Indian", "French", "Chinese", "American"]
+    
+    defaults = {
+        "id": uuid.uuid4(),
+        "name": fake.dish(),
+        "description": fake.dish_description(),
+        "calories": fake.random_int(min=100, max=1500),
+        "ingredients": fake.ingredients(nb=fake.random_int(min=2, max=6)),
+        "cuisine": fake.random_element(cuisines),
+        "price_amount": Decimal(fake.random_int(min=5, max=100)) + Decimal("0.99"),
+        "is_vegetarian": fake.boolean(chance_of_getting_true=30),
+        "is_spicy": fake.boolean(chance_of_getting_true=20)
+    }
+    
+    data = {**defaults, **overrides}
+    return FoodItemMock(**data)

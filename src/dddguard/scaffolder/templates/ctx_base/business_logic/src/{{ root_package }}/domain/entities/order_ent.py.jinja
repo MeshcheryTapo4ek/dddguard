@@ -1,0 +1,44 @@
+from dataclasses import dataclass, field
+from decimal import Decimal
+
+from ..value_objects import (
+    OrderId, MoneyAmount, WeightGrams, OrderStatus, LineItemVo, AddressVo
+)
+from ..errors.logistics_errors import OrderModificationError, EmptyOrderAssemblyError
+
+
+@dataclass(slots=True, kw_only=True)
+class OrderEnt:
+    """
+    Entity representing the customer's order.
+    Managed by Delivery Aggregate.
+    """
+    id: OrderId
+    address: AddressVo
+    items: list[LineItemVo] = field(default_factory=list)
+    status: OrderStatus = OrderStatus.ASSEMBLING
+
+    def add_item(self, item: LineItemVo) -> None:
+        if self.status != OrderStatus.ASSEMBLING:
+            raise OrderModificationError(
+                order_id=self.id, 
+                current_status=self.status
+            )
+        self.items.append(item)
+
+    def mark_assembled(self) -> None:
+        if not self.items:
+            raise EmptyOrderAssemblyError(order_id=self.id)
+        self.status = OrderStatus.ASSEMBLED
+
+    @property
+    def total_weight(self) -> WeightGrams:
+        """Sum of all line items weight."""
+        total = sum((i.total_weight for i in self.items), start=Decimal(0))
+        return WeightGrams(total)
+
+    @property
+    def total_price(self) -> MoneyAmount:
+        """Sum of all line items price."""
+        total = sum((i.total_price for i in self.items), start=Decimal(0))
+        return MoneyAmount(total)

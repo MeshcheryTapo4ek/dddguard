@@ -1,0 +1,46 @@
+import sys
+from loguru import logger as _logger
+
+
+class LoggerSetup:
+    def __init__(self):
+        self._context_levels = {}
+        self._configured = False
+
+    def register_context_level(self, context_name: str, level: str):
+        """Allow contexts to register their desired log level."""
+        self._context_levels[context_name] = level
+
+    def _smart_filter(self, record):
+        """Filter logs based on context-specific levels."""
+        ctx_name = record["extra"].get("context")
+        if not ctx_name:
+            return True
+
+        min_level_str = self._context_levels.get(ctx_name, "INFO")
+        
+        try:
+            min_level_no = _logger.level(min_level_str).no
+        except ValueError:
+            min_level_no = 20 
+            
+        return record["level"].no >= min_level_no
+
+    def setup_logger(self):
+        """
+        Final logger configuration - called only once in Root.
+        """
+        if self._configured:
+            return
+        
+        _logger.remove()
+        _logger.add(
+            sys.stderr, 
+            filter=self._smart_filter,
+            format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{extra[context]: <10}</cyan> - <level>{message}</level>"
+        )
+        self._configured = True
+
+
+logger_setup = LoggerSetup()
+logger = _logger

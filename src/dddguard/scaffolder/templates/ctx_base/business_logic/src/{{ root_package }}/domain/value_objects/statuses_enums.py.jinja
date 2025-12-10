@@ -1,0 +1,19 @@
+import enum
+
+
+class DeliveryStatus(enum.StrEnum):
+    PENDING_MATCHING = "PENDING_MATCHING"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class OrderStatus(enum.StrEnum):
+    ASSEMBLING = "ASSEMBLING"
+    ASSEMBLED = "ASSEMBLED"
+    DONE = "DONE"
+
+
+class CourierStatus(enum.StrEnum):
+    IDLE = "IDLE"
+    BUSY = "BUSY"

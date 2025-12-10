@@ -1,0 +1,89 @@
+from typing import Sequence, List
+from uuid import uuid4
+
+from ..aggregates.delivery_aggregate import Delivery
+from ..entities import OrderEnt, CourierEntity
+from ..value_objects import (
+    DeliveryStatus, OrderStatus, CourierStatus,
+    DeliveryId, MoneyAmount,
+)
+
+from .assignment_policy import AssignmentPolicy
+from .pricing_service import PricingService
+
+
+class OrderMatchingService:
+    """
+    Orchestrates the batch assignment of orders to couriers.
+    Implements a Greedy Algorithm strategy.
+    """
+
+    def __init__(
+        self, 
+        assignment_policy: AssignmentPolicy,
+        pricing_service: PricingService
+    ):
+        self._policy = assignment_policy
+        self._pricing = pricing_service
+
+    def match_batch(
+        self, 
+        orders: Sequence[OrderEnt], 
+        couriers: Sequence[CourierEntity],
+        base_fee: MoneyAmount
+    ) -> List[Delivery]:
+        """
+        Matches assembled orders to idle couriers.
+        
+        Heuristic:
+        1. Process heaviest orders first (Hardest to fit).
+        2. Assign to largest capacity vehicle available (Best fit).
+        """
+        
+        # 1. Filter candidates
+        ready_orders = [o for o in orders if o.status == OrderStatus.ASSEMBLED]
+        idle_couriers = [c for c in couriers if c.status == CourierStatus.IDLE]
+
+        # 2. Sort (Greedy)
+        # Orders: Descending by weight
+        ready_orders.sort(key=lambda o: o.total_weight, reverse=True)
+        
+        # Couriers: Descending by capacity
+        idle_couriers.sort(key=lambda c: c.vehicle.capacity, reverse=True)
+
+        deliveries: List[Delivery] = []
+        assigned_courier_ids = set()
+
+        # 3. Allocation Loop
+        for order in ready_orders:
+            for courier in idle_couriers:
+                
+                # Skip if already picked in this batch
+                if courier.id in assigned_courier_ids:
+                    continue
+
+                if self._policy.can_transport(order, courier):
+                    # --- Domain Logic Execution ---
+                    
+                    # 1. Lock resource (Side effect on Entity)
+                    courier.occupy()
+                    assigned_courier_ids.add(courier.id)
+
+                    # 2. Create Aggregate
+                    delivery = Delivery(
+                        id=DeliveryId(uuid4()),
+                        order=order,
+                        courier=courier,
+                        status=DeliveryStatus.IN_PROGRESS
+                    )
+                    
+                    # 3. Calculate Cost
+                    cost = self._pricing.calculate_cost(delivery, base_fee)
+                    delivery.cost = cost
+                    
+                    deliveries.append(delivery)
+                    
+                    # Move to next order
+                    break
+
+        return deliveries

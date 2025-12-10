@@ -1,0 +1,63 @@
+import pytest
+from uuid import uuid4
+from decimal import Decimal
+
+from {{ root_package }}.domain import (
+    OrderId, CourierId, DeliveryId,
+    MoneyAmount, WeightGrams,
+    OrderEnt, CourierEntity,
+    LineItemVo, AddressVo, VehicleVo,
+    OrderStatus, CourierStatus
+)
+
+@pytest.fixture
+def address_vo():
+    return AddressVo(
+        city="New York",
+        street="5th Avenue",
+        building="10",
+        zip_code="10001"
+    )
+
+@pytest.fixture
+def vehicle_vo():
+    return VehicleVo(
+        plate_number="AB-123-CD",
+        model="Van",
+        capacity=WeightGrams(10000) # 10kg
+    )
+
+@pytest.fixture
+def order_entity(address_vo):
+    return OrderEnt(
+        id=OrderId(uuid4()),
+        address=address_vo,
+        status=OrderStatus.ASSEMBLING
+    )
+
+@pytest.fixture
+def courier_entity(vehicle_vo):
+    return CourierEntity(
+        id=CourierId(uuid4()),
+        name="John Doe",
+        vehicle=vehicle_vo,
+        status=CourierStatus.IDLE
+    )
+
+@pytest.fixture
+def item_iphone():
+    return LineItemVo(
+        name="iPhone 15",
+        price=MoneyAmount(1000),
+        weight=WeightGrams(200),
+        quantity=1
+    )
+
+@pytest.fixture
+def item_fridge():
+    return LineItemVo(
+        name="Fridge",
+        price=MoneyAmount(500),
+        weight=WeightGrams(50000), # 50kg
+        quantity=1
+    )

@@ -1,0 +1,24 @@
+from dataclasses import dataclass
+
+from ..value_objects import CourierId, CourierStatus, VehicleVo
+from ..errors.logistics_errors import CourierBusyError
+
+
+@dataclass(slots=True, kw_only=True)
+class CourierEntity:
+    """
+    Entity representing a courier worker.
+    Managed by Delivery Aggregate.
+    """
+    id: CourierId
+    name: str
+    vehicle: VehicleVo
+    status: CourierStatus = CourierStatus.IDLE
+
+    def occupy(self) -> None:
+        if self.status != CourierStatus.IDLE:
+            raise CourierBusyError(courier_id=self.id)
+        self.status = CourierStatus.BUSY
+
+    def release(self) -> None:
+        self.status = CourierStatus.IDLE

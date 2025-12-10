@@ -1,0 +1,62 @@
+from dataclasses import dataclass
+from typing import Optional
+
+from ..value_objects import DeliveryId, MoneyAmount, DeliveryStatus, OrderStatus
+from ..entities import OrderEnt, CourierEntity
+from ..errors.logistics_errors import (
+    InvalidDeliveryStateError, 
+    DeliveryCompletenessError,
+    OrderModificationError
+)
+
+
+@dataclass(slots=True, kw_only=True)
+class Delivery:
+    """
+    Aggregate Root.
+    Guarantees consistency between Order and Courier.
+    """
+    id: DeliveryId
+    order: OrderEnt
+    courier: Optional[CourierEntity] = None
+    status: DeliveryStatus = DeliveryStatus.PENDING_MATCHING
+    cost: Optional[MoneyAmount] = None
+
+    def assign_courier(self, courier: CourierEntity, calculated_cost: MoneyAmount) -> None:
+        # Check Delivery State
+        if self.status != DeliveryStatus.PENDING_MATCHING:
+            raise InvalidDeliveryStateError(
+                delivery_id=self.id,
+                current_status=self.status,
+                operation="assign_courier"
+            )
+            
+        # Check Order State (Invariant)
+        if self.order.status != OrderStatus.ASSEMBLED:
+            raise OrderModificationError(
+                order_id=self.order.id,
+                current_status=self.order.status
+            )
+
+        courier.occupy()
+        
+        self.courier = courier
+        self.cost = calculated_cost
+        self.status = DeliveryStatus.IN_PROGRESS
+
+    def complete_delivery(self) -> None:
+        if self.status != DeliveryStatus.IN_PROGRESS:
+            raise InvalidDeliveryStateError(
+                delivery_id=self.id,
+                current_status=self.status,
+                operation="complete_delivery"
+            )
+
+        if not self.courier:
+            raise DeliveryCompletenessError(
+                delivery_id=self.id,
+                reason="No courier assigned"
+            )
+            
+        self.courier.release()
+        self.status = DeliveryStatus.COMPLETED

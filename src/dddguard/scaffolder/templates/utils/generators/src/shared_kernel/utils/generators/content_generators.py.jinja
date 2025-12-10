@@ -1,0 +1,57 @@
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+from faker import Faker
+
+fake = Faker()
+
+@dataclass
+class ReviewMock:
+    id: uuid.UUID
+    author_id: uuid.UUID
+    product_id: uuid.UUID
+    rating: int
+    title: str
+    body: str
+    created_at: datetime
+    is_verified_purchase: bool
+
+@dataclass
+class ChatMessageMock:
+    id: uuid.UUID
+    chat_room_id: uuid.UUID
+    sender_id: uuid.UUID
+    content: str
+    sent_at: datetime
+    is_read: bool
+    attachment_url: Optional[str] = None
+
+def generate_review(**overrides) -> ReviewMock:
+    defaults = {
+        "id": uuid.uuid4(),
+        "author_id": uuid.uuid4(),
+        "product_id": uuid.uuid4(),
+        "rating": fake.random_int(min=1, max=5),
+        "title": fake.sentence(nb_words=4).rstrip("."),
+        "body": fake.paragraph(nb_sentences=3),
+        "created_at": fake.date_time_this_year(),
+        "is_verified_purchase": fake.boolean(chance_of_getting_true=70)
+    }
+    data = {**defaults, **overrides}
+    return ReviewMock(**data)
+
+def generate_chat_message(**overrides) -> ChatMessageMock:
+    has_attachment = fake.boolean(chance_of_getting_true=10)
+    
+    defaults = {
+        "id": uuid.uuid4(),
+        "chat_room_id": uuid.uuid4(),
+        "sender_id": uuid.uuid4(),
+        "content": fake.text(max_nb_chars=160),
+        "sent_at": fake.date_time_between(start_date="-1d", end_date="now"),
+        "is_read": fake.boolean(chance_of_getting_true=60),
+        "attachment_url": fake.file_path(extension="png") if has_attachment else None
+    }
+    data = {**defaults, **overrides}
+    return ChatMessageMock(**data)

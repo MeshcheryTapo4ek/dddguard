@@ -1,0 +1,17 @@
+from dataclasses import dataclass
+from ..interfaces import ILogisticsRepository
+from ...domain import DeliveryId, DeliveryStatus
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class GetDeliveryStatusQuery:
+    """
+    Read-only operation.
+    """
+    repo: ILogisticsRepository
+
+    def execute(self, delivery_id: DeliveryId) -> DeliveryStatus | None:
+        delivery = self.repo.get_delivery(delivery_id)
+        if not delivery:
+            return None
+        return delivery.status

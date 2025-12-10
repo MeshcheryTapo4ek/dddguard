@@ -1,0 +1,49 @@
+from dataclasses import dataclass
+from typing import List
+
+from ..interfaces import ILogisticsRepository
+from ...domain import (
+    OrderMatchingService, 
+    Delivery, 
+    MoneyAmount, 
+    mk_money
+)
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class MatchOrdersUseCase:
+    """
+    Complex Use Case:
+    1. Loads all candidates (Orders and Couriers).
+    2. Runs Domain Service (Matching Algorithm).
+    3. Persists results (New Deliveries and Updated Couriers/Orders).
+    """
+    repo: ILogisticsRepository
+    matching_service: OrderMatchingService
+
+    def execute(self) -> List[Delivery]:
+        # 1. Load Data
+        ready_orders = self.repo.get_assembled_orders()
+        idle_couriers = self.repo.get_idle_couriers()
+        
+        if not ready_orders or not idle_couriers:
+            return []
+
+        # 2. Run Domain Logic
+        # (Pure memory operation, no IO inside service)
+        base_fee = mk_money("5.00")
+        new_deliveries = self.matching_service.match_batch(
+            orders=ready_orders,
+            couriers=idle_couriers,
+            base_fee=base_fee
+        )
+
+        # 3. Persist Changes
+        # Note: In a real app, this should be transactional (Unit of Work)
+        for delivery in new_deliveries:
+            self.repo.save_delivery(delivery)
+            # Courier status changed to BUSY inside logic, need to save
+            self.repo.save_courier(delivery.courier) 
+            # Order attached to delivery, status might change if modeled that way
+            self.repo.save_order(delivery.order)
+
+        return new_deliveries
