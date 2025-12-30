@@ -1,33 +1,42 @@
 from .value_objects import (
-    ClassificationResultVo, 
-    SourceFileVo, 
-    DependencyLink, 
-    DependencyNode, 
-    DependencyGraph, 
-    ScanResult, 
-    ImportedModuleVo
+    ClassificationResultVo,
+    SourceFileVo,
+    DependencyLink,
+    ScanResult,
+    ImportedModuleVo,
+    ScannedModuleVo,
+    ClassifiedTreeVo,
 )
-from .services.imports.ast_import_parser_service import AstImportParserService
-from .services.identity.layer_heuristic_service import LayerHeuristicService
-from .services.identity.scope_heuristic_service import ScopeHeuristicService
-from .services.identity.regex_matcher_service import RegexMatcherService
-from .errors import ScannerDomainError, ImportParsingError, HeuristicIdentificationError
+from .entities import (
+    DependencyNode,
+    DependencyGraph,
+    ProjectStructureTree,
+)
+from .services.ast_import_parser_service import AstImportParserService
+from .services.srm_engine_service import SrmEngineService
+from .services.module_resolution_service import ModuleResolutionService
+from .services.dependency_expansion_service import DependencyExpansionService
+from .errors import ScannerDomainError, ImportParsingError
 
 __all__ = [
+    # VOs
     "ClassificationResultVo",
     "SourceFileVo",
     "DependencyLink",
-    "DependencyNode",
-    "DependencyGraph",
     "ScanResult",
     "ImportedModuleVo",
-
+    "ScannedModuleVo",
+    "ClassifiedTreeVo",
+    # Entities
+    "DependencyNode",
+    "DependencyGraph",
+    "ProjectStructureTree",
+    # Services
     "AstImportParserService",
-    "LayerHeuristicService",
-    "ScopeHeuristicService",
-    "RegexMatcherService",
-    
+    "SrmEngineService",
+    "ModuleResolutionService",
+    "DependencyExpansionService",
+    # Errors
     "ScannerDomainError",
     "ImportParsingError",
-    "HeuristicIdentificationError",
 ]

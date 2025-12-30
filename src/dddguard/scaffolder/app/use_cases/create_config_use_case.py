@@ -2,37 +2,32 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..interfaces import IFileSystemGateway
-from ...domain import RenderedFileVo
-from ...adapters.assets import DEFAULT_CONFIG_TEMPLATE
 from ..errors import ScaffolderAppError
+from ...domain import ScaffolderFileVo
+from ...domain.assets import DEFAULT_CONFIG_TEMPLATE
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class CreateConfigUseCase:
     """
-    App Service: Generates a standalone configuration file.
+    App Service: Generates the default configuration file for the project.
     """
+
     fs_gateway: IFileSystemGateway
 
-    def execute(self, output_path: Path) -> None:
+    def execute(self, target_path: Path) -> None:
         """
         Creates the config file at the specified path.
-        Injects the current working directory as root_dir.
+        Injects the current working directory as root_dir in the template.
         """
         try:
-            target_root = output_path.parent
-            filename = output_path.name
-            
-            # Inject absolute path of the current directory
             cwd_str = Path.cwd().as_posix()
+
             content = DEFAULT_CONFIG_TEMPLATE.format(root_dir=cwd_str)
 
-            file_vo = RenderedFileVo(
-                relative_path=Path(filename),
-                content=content
-            )
+            file_vo = ScaffolderFileVo(path=target_path, content=content)
 
-            self.fs_gateway.write_files(target_root, [file_vo])
-            
+            self.fs_gateway.write_file(file_vo)
+
         except Exception as e:
             raise ScaffolderAppError(f"Failed to generate config: {e}") from e

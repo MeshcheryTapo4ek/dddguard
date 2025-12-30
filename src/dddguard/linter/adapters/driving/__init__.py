@@ -1,7 +1,11 @@
-from .linter_controller import LinterController
-from .errors import LinterAdapterError
+from .cli import (
+    register_commands,
+    run_lint_project_flow,
+    run_lint_directory_flow,
+)
 
 __all__ = [
-    "LinterController",
-    "LinterAdapterError",
+    "register_commands",
+    "run_lint_project_flow",
+    "run_lint_directory_flow",
 ]

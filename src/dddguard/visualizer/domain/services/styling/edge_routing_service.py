@@ -10,10 +10,10 @@ class EdgeRoutingService:
     - Downward dependencies always Exit Bottom -> Enter Top.
     - Side-by-side dependencies use Left/Right.
     """
-    
+
     # How much vertical overlap is allowed before we consider them "side-by-side"
     # 0.5 means if they overlap by 50% height, treat as horizontal row.
-    overlap_threshold: float = 0.5 
+    overlap_threshold: float = 0.5
 
     def anchor_style(
         self,
@@ -38,17 +38,17 @@ class EdgeRoutingService:
         tgt_bottom = ty + th
 
         # --- Determine Relative Position ---
-        
+
         # 1. Check for Downward Flow (Standard Layer Dependency)
         # If the Target's top is clearly below the Source's "center-ish"
         # We use a slight buffer so slight misalignments don't break logic
         if tgt_top >= (src_bottom - (sh * (1 - self.overlap_threshold))):
             direction = "DOWN"
-            
+
         # 2. Check for Upward Flow (Callbacks, or Mistakes)
         elif tgt_bottom <= (src_top + (sh * (1 - self.overlap_threshold))):
             direction = "UP"
-            
+
         # 3. Otherwise, they are effectively on the same horizontal row (Side-by-Side)
         else:
             direction = "SIDE"
@@ -71,18 +71,18 @@ class EdgeRoutingService:
             # Waterfall: Exit Bottom, Enter Top
             parts.append(f"exitX={out_pos:.2f};exitY=1;exitDx=0;exitDy=0;")
             parts.append(f"entryX={in_pos:.2f};entryY=0;entryDx=0;entryDy=0;")
-            
+
         elif direction == "UP":
             # Reverse Waterfall: Exit Top, Enter Bottom
             parts.append(f"exitX={out_pos:.2f};exitY=0;exitDx=0;exitDy=0;")
             parts.append(f"entryX={in_pos:.2f};entryY=1;entryDx=0;entryDy=0;")
-            
-        else: # SIDE
+
+        else:  # SIDE
             # Determine Left or Right based on center X
             sc_x = sx + sw / 2.0
             tc_x = tx + tw / 2.0
-            
-            if tc_x > sc_x: 
+
+            if tc_x > sc_x:
                 # Target is to the Right -> Exit Right, Enter Left
                 parts.append(f"exitX=1;exitY={out_pos:.2f};exitDx=0;exitDy=0;")
                 parts.append(f"entryX=0;entryY={in_pos:.2f};entryDx=0;entryDy=0;")

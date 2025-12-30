@@ -1,208 +1,350 @@
-from typing import List, Dict
+from typing import List, NamedTuple
 from collections import defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 
-from dddguard.scanner.domain import DependencyGraph
+from dddguard.shared import ArchetypeType
 
 from ...domain import (
-    ContextTower, TowerZone, Box, ZoneBackground, 
-    StyleService, ZoneBuilderService, HorizontalAligner, VerticalStacker
+    DependencyGraph,
+    ContextTower,
+    TowerZone,
+    ZoneBackground,
+    StyleService,
+    ZoneBuilderService,
+    VisualContainer,
+    FlowPackingService,
 )
+
+from ..workflows.find_optimized_tower_workflow import FindOptimizedTowerWorkflow
+
+
+class ZoneLayoutData(NamedTuple):
+    name: str
+    y_start: float
+    height: float
+    width: float
+    items: List[VisualContainer] 
+    backgrounds: List[ZoneBackground]
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class CalculateLayoutUseCase:
     """
     App Use Case: Orchestrates the calculation of the visual layout.
+    Supports both Single-Column zones (App/Domain) and Split-Column zones (Adapters/Ports).
     """
+
     style: StyleService
     builder: ZoneBuilderService
-    aligner: HorizontalAligner
-    stacker: VerticalStacker
+    optimize_tower: FindOptimizedTowerWorkflow
+    packer: FlowPackingService = field(default_factory=FlowPackingService)
 
-    def execute(self, graph: DependencyGraph) -> List[ContextTower]:
+    def execute(
+        self, graph: DependencyGraph,
+    ) -> List[ContextTower]:
         nodes_by_context = defaultdict(list)
+
+        # 1. Global Filter Loop
         for node in graph.all_nodes:
-            if not node.is_external:
-                nodes_by_context[node.context].append(node)
+            if node.is_external:
+                continue
+            
+            if node.component_type == ArchetypeType.MARKER or str(node.component_type) == "MARKER":
+                continue
+
+            nodes_by_context[node.context].append(node)
 
         towers = []
         curr_x = 0.0
-        
-        # Sort contexts for diagram stability
+
         for ctx_name, nodes in sorted(nodes_by_context.items()):
-            if not nodes: continue
-            
-            # 1. Create tower geometry (the entire structure and zones)
+            if not nodes:
+                continue
+
+            # 2. Create tower geometry
             tower = self._create_tower_geometry(ctx_name, nodes)
-            
-            # 2. Position the tower globally on the canvas
+
+            # 3. Position the tower
             tower = replace(tower, x=curr_x)
             towers.append(tower)
-            
+
             curr_x += tower.width + self.style.TOWER_PAD_X
 
         return towers
 
     def _create_tower_geometry(self, name: str, nodes: list) -> ContextTower:
-        # A. Build the raw structure (Layer -> Row -> Alignment)
+        # 1. Build Initial Structure (ZoneKey -> List[Container])
         structure = self.builder.build_context_structure(nodes)
+
+        # 2. Apply Optimization Workflow (Reorders the lists independently)
+        structure = self.optimize_tower.execute(structure)
+
+        # Architectural Zone Order
+        zone_order = ["ADAPTERS", "PORTS", "APP", "DOMAIN", "COMPOSITION", "OTHER"]
         
-        # B. Phase 1: Horizontal alignment (Adapters <-> Interfaces)
-        # Get the smart width of the right column and interface offsets
-        smart_r_width, if_positions = self.aligner.calculate_offsets(structure)
-        
-        # C. Calculate column widths (Left, Center, Right)
-        geo = self._calc_dimensions(structure, smart_r_width)
-        
-        # D. Phase 2 & 3: Assembling zones
-        zones = []
+        zone_layouts: List[ZoneLayoutData] = []
         current_y = self.style.HEADER_HEIGHT
         
-        # Zone drawing order
-        zone_order = ["PORTS", "ADAPTERS", "APP", "DOMAIN", "COMPOSITION"]
-        
+        # Track max width found across all zones to align backgrounds later
+        max_tower_width = self.style.MIN_BLOCK_WIDTH
+
         for z_name in zone_order:
-            zone_start_y = current_y
+            # For ADAPTERS/PORTS, we check for suffixed keys.
+            # For others, we check exact match.
+            is_split_zone = z_name in ("ADAPTERS", "PORTS")
             
-            # === SPECIAL LOGIC: APP LAYER (Vertical Gravity) ===
-            if z_name == "APP":
-                app_nodes, app_height = self.stacker.layout_app_layer(
-                    structure.get("APP", {}),
-                    if_positions,
-                    {
-                        "col_l": geo["col_l_x"], "col_r": geo["col_r_x"],
-                        "sidebar": geo["sidebar_w"], "content_w": geo["final_content_w"],
-                        "start_y": current_y
-                    },
-                    self._make_box # Pass the box factory as a callback
-                )
-                bg = ZoneBackground(
-                    x_rel=geo["sidebar_w"], y_rel=zone_start_y, 
-                    width=geo["final_content_w"], height=app_height,
-                    color=self.style.ZONE_BG_COLORS.get("APP_BG", "#f5f5f5"), side="center"
-                )
-                zones.append(TowerZone(
-                    name=z_name, y_bottom=current_y + app_height, height=app_height,
-                    backgrounds=[bg], nodes=app_nodes
-                ))
-                current_y += app_height + self.style.ZONE_GAP_Y
-                continue
-            
-            # === STANDARD LOGIC (Simple Flow) ===
-            zone_nodes, zone_height = self._layout_standard_zone(z_name, structure.get(z_name, {}), current_y, geo)
-            
-            backgrounds = self._create_backgrounds(z_name, zone_start_y, zone_height, geo)
-            
-            zones.append(TowerZone(
-                name=z_name, y_bottom=current_y + zone_height, height=zone_height,
-                backgrounds=backgrounds, nodes=zone_nodes
-            ))
-            current_y += zone_height + self.style.ZONE_GAP_Y
-
-        return ContextTower(name=name, x=0, width=geo["total_w"], zones=zones, forced_height=current_y)
-
-    # --- Helpers ---
-
-    def _calc_dimensions(self, structure: Dict, smart_r: float) -> Dict[str, float]:
-        # 1. Calculate maximum content widths
-        ml, mc, mr = 0.0, self.style.MIN_NODE_WIDTH * 2, smart_r
-        for z, rows in structure.items():
-            if z == "APP": continue # APP is calculated dynamically
-            for _, sides in rows.items():
-                if sides["center"]: 
-                    mc = max(mc, self.builder.sum_width(sides["center"]))
-                else:
-                    ml = max(ml, self.builder.sum_width(sides["left"]))
-                    mr = max(mr, self.builder.sum_width(sides["right"]))
-        
-        # 2. Add block indents
-        req_l = ml + (self.style.BLOCK_PAD_X * 2)
-        req_r = mr + (self.style.BLOCK_PAD_X * 2)
-        
-        fl = max(req_l, self.style.MIN_BLOCK_WIDTH)
-        fr = max(req_r, self.style.MIN_BLOCK_WIDTH)
-        
-        # 3. Synchronize the central width
-        split_w = fl + fr + self.style.SPLIT_GAP_X
-        final_w = max(split_w, mc + (self.style.NODE_GAP_X * 2))
-        
-        if final_w > split_w:
-            diff = (final_w - split_w) / 2
-            fl += diff; fr += diff
-            
-        sb_w = self.style.ZONE_HEADER_WIDTH
-        
-        return {
-            "final_col_l": fl, "final_col_r": fr,
-            "final_content_w": final_w,
-            "col_l_x": sb_w,
-            "col_r_x": sb_w + fl + self.style.SPLIT_GAP_X,
-            "sidebar_w": sb_w,
-            "total_w": sb_w + final_w
-        }
-
-    def _layout_standard_zone(self, z_name, rows_dict, start_y, geo):
-        nodes = []
-        curr_y = start_y
-        
-        if not rows_dict:
-             return nodes, self.style.NODE_HEIGHT + self.style.ROW_PAD_Y
-        
-        for r_idx in sorted(rows_dict.keys()):
-            sides = rows_dict[r_idx]
-            h = self.style.NODE_HEIGHT + self.style.ROW_PAD_Y * 2
-            
-            # Center Flow
-            if sides["center"]:
-                wc = self.builder.sum_width(sides["center"])
-                cx = geo["sidebar_w"] + (geo["final_content_w"] - wc)/2
-                for b in sides["center"]:
-                    nodes.append(self._make_box(cx, curr_y, b))
-                    cx += b["width"] + self.style.NODE_GAP_X
+            if is_split_zone:
+                driving = structure.get(f"{z_name}_DRIVING", [])
+                driven = structure.get(f"{z_name}_DRIVEN", [])
+                other = structure.get(f"{z_name}_OTHER", [])
+                has_content = bool(driving or driven or other)
             else:
-                # Left Flow
-                w_l = self.builder.sum_width(sides["left"])
-                offset_l = (geo["final_col_l"] - w_l) / 2
-                curr_x = geo["col_l_x"] + max(0, offset_l)
-                for b in sides["left"]:
-                    nodes.append(self._make_box(curr_x, curr_y, b))
-                    curr_x += b["width"] + self.style.NODE_GAP_X
+                items = structure.get(z_name, [])
+                has_content = bool(items)
+
+            if not has_content:
+                continue
+
+            zone_bg_y = current_y
+            
+            # --- RENDER LOGIC ---
+            
+            if is_split_zone:
+                # SPLIT LAYOUT: Other on Top, then Split Driving/Driven
+                layout_res = self._layout_split_zone(
+                    z_name=z_name, 
+                    driving=driving, 
+                    driven=driven, 
+                    other=other, 
+                    start_y=current_y
+                )
+            else:
+                # NORMAL LAYOUT: Single Flow
+                layout_res = self._layout_single_zone(
+                    z_name=z_name, 
+                    items=items, 
+                    start_y=current_y
+                )
+
+            # Update geometry tracking
+            max_tower_width = max(max_tower_width, layout_res.width)
+            current_y = zone_bg_y + layout_res.height + self.style.ZONE_GAP_Y
+
+            zone_layouts.append(layout_res)
+
+        final_zones: List[TowerZone] = []
+
+        # 3. Finalize Backgrounds (Stretch to max width)
+        for z in zone_layouts:
+            final_backgrounds = []
+            
+            # Re-process backgrounds to match global tower width
+            for bg in z.backgrounds:
+                # Split Logic Alignment
+                if bg.side == "left":
+                    # Stays on left
+                    final_backgrounds.append(bg)
+                elif bg.side == "right":
+                    # Moves to far right
+                    new_x = max_tower_width - bg.width
+                    
+                    final_backgrounds.append(replace(bg, x_rel=new_x))
+                else: # Center
+                    # Stretch to full width
+                    full_w = max_tower_width - self.style.ZONE_HEADER_WIDTH
+                    final_backgrounds.append(replace(bg, width=full_w))
+
+            # Re-position items if needed (e.g. centering single zones, or right-aligning driven)
+            final_items = []
+            for it in z.items:
+                final_items.append(it)
+
+            
+            # If we have distinct Left/Right backgrounds, we should fill the gap.
+            has_left = any(b.side == "left" for b in final_backgrounds)
+            has_right = any(b.side == "right" for b in final_backgrounds)
+            
+            if has_left and has_right:
+                # Find the right-side bg
+                rbg = next(b for b in final_backgrounds if b.side == "right")
+                lbg = next(b for b in final_backgrounds if b.side == "left")
                 
-                # Right Flow (Support Smart Offset from Phase 1)
-                w_r = self.builder.sum_width(sides["right"])
-                offset_r = (geo["final_col_r"] - w_r) / 2
-                curr_x_r = geo["col_r_x"] + max(0, offset_r)
-                for b in sides["right"]:
-                    if "_smart_offset" in b:
-                        pos = geo["col_r_x"] + self.style.BLOCK_PAD_X + b["_smart_offset"]
-                    else:
-                        pos = curr_x_r
-                        curr_x_r += b["width"] + self.style.NODE_GAP_X
-                    nodes.append(self._make_box(pos, curr_y, b))
-            
-            curr_y += h
-            
-        return nodes, curr_y - start_y
+                # If there is a gap between left end and right start
+                gap = rbg.x_rel - (lbg.x_rel + lbg.width)
+                if gap > 0:
+                    # Extend Left to cover it? Or split?
+                    # Let's extend Left
+                    lbg_idx = final_backgrounds.index(lbg)
+                    final_backgrounds[lbg_idx] = replace(lbg, width=lbg.width + gap)
 
-    def _create_backgrounds(self, z_name, start_y, height, geo):
-        if z_name in ["PORTS", "ADAPTERS"]:
-            return [
-                ZoneBackground(x_rel=geo["col_l_x"], y_rel=start_y, width=geo["final_col_l"], height=height, 
-                               color=self.style.ZONE_BG_COLORS["DRIVING_BG"], label="DRIVING", label_align="center", side="left"),
-                ZoneBackground(x_rel=geo["col_r_x"], y_rel=start_y, width=geo["final_col_r"], height=height, 
-                               color=self.style.ZONE_BG_COLORS["DRIVEN_BG"], label="DRIVEN", label_align="center", side="right")
-            ]
-        bg_color = self.style.ZONE_BG_COLORS.get(f"{z_name}_BG", "#f5f5f5")
-        return [ZoneBackground(x_rel=geo["sidebar_w"], y_rel=start_y, width=geo["final_content_w"], height=height, 
-                               color=bg_color, label=None, label_align="center", side="center")]
+            final_zones.append(
+                TowerZone(
+                    name=z.name,
+                    y_bottom=z.y_start + z.height,
+                    height=z.height,
+                    backgrounds=final_backgrounds,
+                    containers=final_items,
+                )
+            )
 
-    def _make_box(self, x: float, y: float, node_data: dict) -> Box:
-        return Box(
-            x=x, y=y + self.style.ROW_PAD_Y,
-            width=node_data["width"], height=node_data["height"],
-            label=node_data["label"], color=node_data["color"],
-            id=node_data["id"], layer=node_data["layer"],
-            raw_type=node_data["raw_type"], context=node_data.get("context", ""),
-            outgoing_imports=node_data["imports"],
+        return ContextTower(
+            name=name,
+            x=0.0,
+            width=max_tower_width,
+            zones=final_zones,
+            forced_height=current_y,
+        )
+
+    def _layout_single_zone(self, z_name: str, items: List[VisualContainer], start_y: float) -> ZoneLayoutData:
+        start_x = self.style.ZONE_HEADER_WIDTH
+        
+        packed = self.packer.pack(
+            elements=items,
+            start_x=start_x,
+            start_y=start_y,
+            gap_x=self.style.CONTAINER_GAP_X,
+            gap_y=self.style.CONTAINER_GAP_Y,
+            wrap_width=None
+        )
+        
+        w = packed.max_right
+        h = packed.max_bottom - start_y
+        
+        bg = ZoneBackground(
+            x_rel=self.style.ZONE_HEADER_WIDTH,
+            y_rel=start_y,
+            width=max(0.0, w - self.style.ZONE_HEADER_WIDTH),
+            height=h,
+            color=self.style.ZONE_BG_COLORS.get(f"{z_name}_BG", "#f0f0f0"),
+            side="center"
+        )
+        
+        return ZoneLayoutData(
+            name=z_name,
+            y_start=start_y,
+            height=h,
+            width=w,
+            items=packed.positioned,
+            backgrounds=[bg]
+        )
+
+    def _layout_split_zone(
+        self, z_name: str, driving: List, driven: List, other: List, start_y: float
+    ) -> ZoneLayoutData:
+        """
+        Layouts Other on top, then Driving (Left) and Driven (Right).
+        """
+        current_y = start_y
+        all_items = []
+        backgrounds = []
+        
+        max_w = self.style.ZONE_HEADER_WIDTH
+        
+        # 1. Other (Full Width)
+        if other:
+            packed_other = self.packer.pack(
+                elements=other,
+                start_x=self.style.ZONE_HEADER_WIDTH,
+                start_y=current_y,
+                gap_x=self.style.CONTAINER_GAP_X,
+                gap_y=self.style.CONTAINER_GAP_Y,
+                wrap_width=None
+            )
+            all_items.extend(packed_other.positioned)
+            
+            h_other = packed_other.max_bottom - current_y
+            w_other = packed_other.max_right
+            
+            backgrounds.append(
+                ZoneBackground(
+                    x_rel=self.style.ZONE_HEADER_WIDTH,
+                    y_rel=current_y,
+                    width=max(0.0, w_other - self.style.ZONE_HEADER_WIDTH),
+                    height=h_other,
+                    color=self.style.ZONE_BG_COLORS.get(f"{z_name}_BG", "#f0f0f0"),
+                    side="center"
+                )
+            )
+            
+            current_y = packed_other.max_bottom + self.style.ROW_GAP_Y
+            max_w = max(max_w, w_other)
+
+        # 2. Split Columns (Driving vs Driven)
+        # We need to pack them independently to determine widths, then place Driven to the right of Driving.
+        
+        start_x_driving = self.style.ZONE_HEADER_WIDTH
+        
+        # Reserve distinct label space?
+        # Let's add a small top pad if we have split columns for the "Driving/Driven" label
+        split_start_y = current_y + self.style.SPLIT_LABEL_HEIGHT
+        
+        packed_driving = self.packer.pack(
+            elements=driving,
+            start_x=start_x_driving,
+            start_y=split_start_y,
+            gap_x=self.style.CONTAINER_GAP_X,
+            gap_y=self.style.CONTAINER_GAP_Y,
+            wrap_width=None
+        )
+        
+        w_driving = max(self.style.MIN_BLOCK_WIDTH, packed_driving.max_right - start_x_driving)
+        # Gap between columns
+        col_gap = self.style.MIN_BLOCK_WIDTH * 0.5 
+        
+        start_x_driven = packed_driving.max_right + col_gap
+        
+        packed_driven = self.packer.pack(
+            elements=driven,
+            start_x=start_x_driven,
+            start_y=split_start_y,
+            gap_x=self.style.CONTAINER_GAP_X,
+            gap_y=self.style.CONTAINER_GAP_Y,
+            wrap_width=None
+        )
+        
+        w_driven = packed_driven.max_right - start_x_driven
+        
+        # Combine items
+        all_items.extend(packed_driving.positioned)
+        all_items.extend(packed_driven.positioned)
+        
+        split_bottom = max(packed_driving.max_bottom, packed_driven.max_bottom, split_start_y + 1.0)
+        split_height = split_bottom - current_y # Include the label pad
+        
+        # Driving Background
+        backgrounds.append(
+            ZoneBackground(
+                x_rel=start_x_driving,
+                y_rel=current_y, # Start at current_y to cover label area
+                width=w_driving,
+                height=split_height,
+                color=self.style.ZONE_BG_COLORS.get(f"{z_name}_DRIVING_BG", "#e8f5e9"),
+                side="left",
+                label="DRIVING"
+            )
+        )
+        
+        # Driven Background
+        backgrounds.append(
+            ZoneBackground(
+                x_rel=start_x_driven,
+                y_rel=current_y,
+                width=w_driven,
+                height=split_height,
+                color=self.style.ZONE_BG_COLORS.get(f"{z_name}_DRIVEN_BG", "#fffde7"),
+                side="right",
+                label="DRIVEN"
+            )
+        )
+        
+        max_w = max(max_w, packed_driven.max_right)
+        total_height = split_bottom - start_y
+        
+        return ZoneLayoutData(
+            name=z_name,
+            y_start=start_y,
+            height=total_height,
+            width=max_w,
+            items=all_items,
+            backgrounds=backgrounds
         )

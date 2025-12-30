@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-from ...domain import ContextTower
+from ...domain import ContextTower, VisualizationOptions
 
 from ...app import RenderingError, IDiagramRenderer
 
@@ -11,14 +11,15 @@ from ...app import RenderingError, IDiagramRenderer
 class RenderDiagramUseCase:
     """
     App Use Case: Diagram Rendering.
-    Takes the fully calculated geometric towers and persists them 
+    Takes the fully calculated geometric towers and persists them
     using the injected infrastructure adapter (e.g., Draw.io XML).
     """
+
     renderer: IDiagramRenderer
 
-    def execute(self, towers: List[ContextTower], output_path: Path) -> None:
+    def execute(self, towers: List[ContextTower], output_path: Path, options: VisualizationOptions) -> None:
         try:
-            self.renderer.render(towers, output_path)
+            self.renderer.render(towers, output_path, options)
         except Exception as e:
             # Wrap infrastructure errors into clean App Errors
             raise RenderingError(str(output_path), str(e)) from e

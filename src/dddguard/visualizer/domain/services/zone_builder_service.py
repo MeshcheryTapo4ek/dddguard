@@ -1,169 +1,225 @@
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Tuple
+from dataclasses import dataclass, field, replace
+from typing import Dict, List, Any
+from collections import defaultdict
 
-from dddguard.shared import (
-    ContextLayerEnum, 
-    AppTypeEnum, 
-    DomainTypeEnum,
-    DrivingAdapterEnum,
-    DrivenAdapterEnum
-)
+from ..value_objects.visual_primitives import VisualContainer, LeafNode, VisualElement
+from ..value_objects.graph import DependencyNode
 
-from dddguard.scanner.domain import DependencyNode
 from .styling.style_service import StyleService
+from .placement.node_placement_service import NodePlacementService
+from .grouping.node_grouping_service import NodeGroupingService
+from .optimization.flow_packing_service import FlowPackingService
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class ZoneBuilderService:
     """
-    Domain Service: maps logical DDD nodes to visual zones and rows.
+    Domain Service: Orchestrates the creation of the visual structure.
     """
+
     style: StyleService = field(default_factory=StyleService)
+    placement_service: NodePlacementService = field(default_factory=NodePlacementService)
+    grouping_service: NodeGroupingService = field(default_factory=NodeGroupingService)
+    
+    packer: FlowPackingService = field(default_factory=FlowPackingService)
 
-    def build_context_structure(self, nodes: List[DependencyNode]) -> Dict[str, Any]:
-        """
-        Builds a hierarchical structure: zone -> row -> side -> [node_data].
-        FILTERS OUT ERROR OBJECTS to reduce visual noise.
-        """
-        structure: Dict[str, Dict[int, Dict[str, List[Dict[str, Any]]]]] = {
-            "PORTS": {},
-            "ADAPTERS": {},
-            "APP": {},
-            "DOMAIN": {},
-            "COMPOSITION": {},
-            "OTHER": {},
-        }
+    DEBUG_SHOW_WRAPPERS: bool = True 
 
+    def build_context_structure(
+        self, nodes: List[DependencyNode]
+    ) -> Dict[str, List[VisualContainer]]:
+        """
+        Builds a structure: ZoneName -> List[VisualContainer].
+        No rows, no sides. Just a flat list of top-level items per zone.
+        """
+
+        # 1. Placement Phase (Bucket by Zone only)
+        buckets = defaultdict(list)
         for node in nodes:
-            # --- FILTER: Skip Errors globally ---
-            if self._is_error_node(node):
-                continue
+            zone = self.placement_service.get_placement(node)
+            buckets[zone].append(node)
 
-            zone, row, side = self._get_placement(node.layer, node.component_type)
+        # 2. Construction Phase
+        structure: Dict[str, List[VisualContainer]] = {}
 
+        for zone, bucket_nodes in buckets.items():
             if zone not in structure:
-                structure[zone] = {}
+                structure[zone] = []
 
-            if row not in structure[zone]:
-                structure[zone][row] = {"left": [], "right": [], "center": []}
+            containers = self._build_recursive_directory_tree(bucket_nodes)
 
-            node_data = self._create_box_data(node)
-            structure[zone][row][side].append(node_data)
+            structure[zone].extend(containers)
 
         return structure
 
-    def _is_error_node(self, node: DependencyNode) -> bool:
-        """
-        Checks if the node represents an Exception or Error component.
-        """
-        # Check explicit Enum types
-        if node.component_type in (
-            DomainTypeEnum.DOMAIN_ERROR,
-            AppTypeEnum.APP_ERROR,
-            DrivenAdapterEnum.ADAPTER_ERROR,
-            DrivingAdapterEnum.ADAPTER_ERROR,
-        ):
-            return True
-            
-        # Check string representation (fallback)
-        type_str = str(node.component_type)
-        if "Error" in type_str or "Exception" in type_str:
-            return True
-            
-        return False
-
-    def _get_placement(
+    def _build_recursive_directory_tree(
         self,
-        layer: ContextLayerEnum,
-        type_val: Any,
-    ) -> Tuple[str, int, str]:
+        nodes: List[DependencyNode],
+    ) -> List[VisualContainer]:
         """
-        Returns tuple of (zone_name, row_index, side_alignment).
+        Converts a list of nodes into a nested VisualContainer hierarchy.
         """
+        # 1. Build Trie
+        root: Dict[str, Any] = {"_files": []}
 
-        # --- 1. PORTS ---
-        if layer == ContextLayerEnum.DRIVING_PORTS:
-            return "PORTS", 0, "left"
-        if layer == ContextLayerEnum.DRIVEN_PORTS:
-            return "PORTS", 0, "right"
+        for node in nodes:
+            parts = self.grouping_service.get_semantic_path_parts(node)
+            current_level = root
 
-        # --- 2. ADAPTERS ---
-        is_driving_adapter = layer == ContextLayerEnum.DRIVING_ADAPTERS
-        is_driven_adapter = layer == ContextLayerEnum.DRIVEN_ADAPTERS
-        is_dto = layer in (ContextLayerEnum.DRIVING_DTO, ContextLayerEnum.DRIVEN_DTO)
-        
-        # (Error handling logic removed here as we filter them upfront)
+            for part in parts:
+                if part not in current_level:
+                    current_level[part] = {"_files": []}
+                current_level = current_level[part]
 
-        if is_dto:
-            side = "left" if (layer == ContextLayerEnum.DRIVING_DTO) else "right"
-            return "ADAPTERS", 0, side
+            current_level["_files"].append(self._create_leaf_node(node))
 
-        if is_driving_adapter:
-            return "ADAPTERS", 1, "left"
-        
-        if is_driven_adapter:
-            return "ADAPTERS", 1, "right"
+        # 2. Convert Trie to Containers
+        return self._convert_trie_to_containers(root)
 
-        # --- 3. APP LAYER ---
-        if layer == ContextLayerEnum.APP:
-            # (Error handling removed)
+    def _convert_trie_to_containers(
+        self,
+        tree_node: Dict[str, Any],
+    ) -> List[VisualContainer]:
+        """
+        Recursively converts the trie.
+        """
+        results: List[VisualContainer] = []
 
-            # Row 0: Entry Points
-            if type_val == AppTypeEnum.INTERFACE or str(type_val) == "Interface":
-                return "APP", 0, "right" 
-            if type_val == AppTypeEnum.HANDLER:
-                return "APP", 0, "left"
+        # A. Process Sub-folders
+        folder_names = [k for k in tree_node.keys() if k != "_files"]
 
-            # Row 1: Orchestration
-            if type_val == AppTypeEnum.WORKFLOW:
-                return "APP", 1, "center"
+        for folder_name in folder_names:
+            sub_tree = tree_node[folder_name]
 
-            # Row 2: Main Logic
-            if type_val == AppTypeEnum.QUERY:
-                return "APP", 2, "right"
-            
-            return "APP", 2, "left"
+            # Path Compression
+            current_name = folder_name
+            current_node = sub_tree
 
-        # --- 4. DOMAIN LAYER ---
-        if layer == ContextLayerEnum.DOMAIN:
-            # (Error handling removed)
+            while True:
+                sub_folders = [k for k in current_node.keys() if k != "_files"]
+                has_files = len(current_node["_files"]) > 0
 
-            # Row 0: Pure Services
-            if type_val == DomainTypeEnum.DOMAIN_SERVICE:
-                return "DOMAIN", 0, "center"
-            
-            # Row 1: Main Aggregates/Entities
-            if type_val in (DomainTypeEnum.AGGREGATE_ROOT, DomainTypeEnum.ENTITY, DomainTypeEnum.FACTORY):
-                return "DOMAIN", 1, "center"
+                if (not has_files) and (len(sub_folders) == 1):
+                    next_folder = sub_folders[0]
+                    current_name = f"{current_name}/{next_folder}"
+                    current_node = current_node[next_folder]
+                else:
+                    break
 
-            # Row 2: Values (VOs, Events)
-            return "DOMAIN", 2, "center"
+            children = self._convert_trie_to_containers(current_node)
 
-        # --- 5. COMPOSITION ---
-        if layer == ContextLayerEnum.COMPOSITION:
-            return "COMPOSITION", 0, "center"
+            if children:
+                container = self._create_visual_container(
+                    label=current_name,
+                    children=children,
+                    is_visible=True,
+                    id_prefix="dir",
+                )
+                results.append(container)
 
-        # --- 6. Fallback ---
-        return "OTHER", 0, "center"
+        # B. Process Files
+        for leaf in tree_node["_files"]:
+            wrapper = self._wrap_leaf(leaf)
+            results.append(wrapper)
 
-    def _create_box_data(self, node: DependencyNode) -> Dict[str, Any]:
-        type_str = node.component_type.value if hasattr(node.component_type, "value") else str(node.component_type)
+        return results
+
+    def _wrap_leaf(self, leaf: LeafNode) -> VisualContainer:
+        is_visible = self.DEBUG_SHOW_WRAPPERS
+        return self._create_visual_container(
+            label=leaf.label, 
+            children=[leaf],
+            is_visible=is_visible,
+            is_leaf_wrapper=True,
+            id_prefix="wrap"
+        )
+
+    def _create_visual_container(
+        self,
+        label: str,
+        children: List[VisualElement],
+        is_visible: bool,
+        id_prefix: str,
+        is_leaf_wrapper: bool = False,
+    ) -> VisualContainer:
+        """
+        Uses FlowPackingService to determine initial geometry.
+        """
+        pad_x = self.style.CONTAINER_PAD_X if is_visible else 0.0
+        pad_y = self.style.CONTAINER_PAD_Y if is_visible else 0.0
+
+        header_h = 0.8 if is_visible and not is_leaf_wrapper else 0.0
+        if is_visible and is_leaf_wrapper:
+            header_h = 0.2
+
+        start_x = pad_x
+        start_y = header_h + pad_y
+
+        has_only_containers = True
+        for ch in children:
+            if not isinstance(ch, VisualContainer):
+                has_only_containers = False
+                break
+
+        gap_x = self.style.CONTAINER_GAP_X if has_only_containers else self.style.LEAF_GAP_X
+        gap_y = self.style.CONTAINER_GAP_Y if has_only_containers else self.style.LEAF_GAP_Y
+
+        # Use Packer defaults (aspect ratio driven)
+        packed_result = self.packer.pack(
+            elements=children,
+            start_x=start_x,
+            start_y=start_y,
+            gap_x=gap_x,
+            gap_y=gap_y,
+            wrap_width=None 
+        )
+
+        positioned_children = packed_result.positioned
+        content_right = packed_result.max_right
+        content_bottom = packed_result.max_bottom
+
+        total_w = content_right + pad_x if is_visible else content_right
+        total_h = content_bottom + pad_y if is_visible else content_bottom
+
+        if is_leaf_wrapper and (not is_visible) and children:
+            first = children[0]
+            total_w = first.width
+            total_h = first.height
+            positioned_children = [replace(first, x=0.0, y=0.0)]
+
+        child_id = children[0].id if children else "empty"
+        unique_id = f"{id_prefix}_{label}_{child_id}"
+
+        return VisualContainer(
+            x=0.0,
+            y=0.0,
+            width=total_w,
+            height=total_h,
+            label=label,
+            color="none",
+            children=positioned_children,
+            is_visible=is_visible,
+            internal_padding=pad_x,
+            id=unique_id,
+        )
+
+    def _create_leaf_node(self, node: DependencyNode) -> LeafNode:
+        type_str = str(node.component_type).split(".")[-1]
         label = self.style.format_label(node.module_path, type_str)
         imports = [{"module": link.target_module} for link in node.imports]
-
-        return {
-            "label": label,
-            "width": self.style.calculate_node_width(label),
-            "height": self.style.NODE_HEIGHT,
-            "color": self.style.get_node_color(node.layer),
-            "raw_type": type_str,
-            "id": node.module_path,
-            "layer": node.layer,
-            "context": node.context,
-            "imports": imports,
-        }
-
-    def sum_width(self, items: List[Dict[str, Any]]) -> float:
-        if not items:
-            return 0.0
-        return sum(n["width"] for n in items) + (len(items) - 1) * self.style.NODE_GAP_X
+        
+        w = self.style.calculate_node_width(label)
+        h = self.style.NODE_HEIGHT
+        
+        return LeafNode(
+            x=0, y=0,
+            width=w,
+            height=h,
+            label=label,
+            color=self.style.get_node_color(node.layer, node.scope),
+            id=node.module_path,
+            layer=node.layer,
+            raw_type=type_str,
+            context=node.context,
+            outgoing_imports=imports
+        )

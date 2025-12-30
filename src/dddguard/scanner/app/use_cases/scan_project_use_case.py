@@ -1,219 +1,194 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Any, List, Set
-
-from dddguard.shared import ProjectBoundedContextNames
+from typing import Dict, List
 
 from ...domain import (
-    ClassificationResultVo,
     AstImportParserService,
     DependencyGraph,
     DependencyNode,
     DependencyLink,
     ScanResult,
-    ImportedModuleVo,
-    ScannerDomainError,
+    ModuleResolutionService,
+    DependencyExpansionService,
+    ScannedModuleVo,
+    ProjectStructureTree,
 )
 from ..interfaces import IProjectReader
-from ..errors import ProjectScanError, ScannerAppError
+from ..errors import ProjectScanError
 from .classify_file_use_case import ClassifyFileUseCase
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True, slots=True)
 class ScanProjectUseCase:
+    """
+    App Service:
+    Orchestrates the ingestion, graph building, and expansion via Domain Services.
+    """
+
     project_reader: IProjectReader
     classifier: ClassifyFileUseCase
     parser: AstImportParserService
+    module_resolver: ModuleResolutionService
+    dependency_service: DependencyExpansionService
 
     def execute(
-        self, 
-        root_path: Path, 
+        self,
+        scan_root: Path,
+        focus_path: Path,
         whitelist_contexts: List[str] | None = None,
         whitelist_layers: List[str] | None = None,
-        show_root: bool = True,
-        show_shared: bool = True,
         dirs_only: bool = False,
-        scan_all: bool = False
+        scan_all: bool = False,
+        import_depth: int = 0,
     ) -> ScanResult:
-        """
-        Scans project with strict filtering by Context, Layer, and Scope (Root/Shared).
-        """
-        registry: Dict[str, Dict] = {}
-        source_tree: Dict[str, Any] = {}
-        
-        allowed_contexts = set(whitelist_contexts) if whitelist_contexts else None
-        allowed_layers = set(whitelist_layers) if whitelist_layers else None
+        registry: Dict[str, ScannedModuleVo] = {}
 
         try:
-            # --- Pass 1: Discovery & Indexing ---
-            for source_file in self.project_reader.read_project(root_path, scan_all=scan_all):
-                
-                # 1. Classify
-                classification = self.classifier.execute(source_file.path, root_path)
-                
-                # --- STRICT FILTERING START ---
-
-                # A. Scope Filter (Root / Shared)
-                if classification.scope == ProjectBoundedContextNames.COMPOSITION_ROOT and not show_root:
-                    continue
-                
-                if classification.scope == ProjectBoundedContextNames.SHARED and not show_shared:
-                    continue
-
-                # B. Context Filter
-                if allowed_contexts and classification.context_name not in allowed_contexts:
-                    continue
-
-                # C. Layer Filter
-                if allowed_layers:
-                    layer_val = self._get_layer_value(classification.layer)
-                    if layer_val not in allowed_layers:
-                        continue
-                # --- STRICT FILTERING END ---
-
-                # 2. Add to Tree
-                self._add_to_tree(
-                     source_tree, 
-                     source_file.path, 
-                     root_path, 
-                     source_file.content,
-                     dirs_only=dirs_only
+            # === PHASE 1: INGEST EVERYTHING (Full Project) ===
+            for source_file in self.project_reader.read_project(
+                scan_root, scan_all=scan_all
+            ):
+                self._ingest_file(
+                    source_file=source_file,
+                    project_root=scan_root,
+                    registry=registry,
                 )
-                
-                # 3. Parse imports (Python Only)
-                raw_imports = []
-                if source_file.path.suffix == ".py":
-                    try:
-                        raw_imports = self.parser.parse_imports(
-                            source_file.content, source_file.path, root_path
-                        )
-                    except ScannerDomainError as e:
-                        print(f"WARN: Skipping parsing {source_file.path.name}: {e}")
 
-                module_path = self._calculate_module_path(source_file.path, root_path)
-                if not module_path:
-                    continue
+            # Build the Full Graph (Nodes & Edges)
+            graph = self._build_initial_graph(registry, scan_root)
 
-                is_package = source_file.path.name == "__init__.py"
+            # === PHASE 2: APPLY FILTERS (Domain Logic) ===
+            self.dependency_service.apply_visibility_filters(
+                graph=graph,
+                registry=registry,
+                focus_path=str(focus_path),
+                whitelist_contexts=set(whitelist_contexts) if whitelist_contexts else None,
+                whitelist_layers=set(whitelist_layers) if whitelist_layers else None,
+            )
 
-                registry[module_path] = {
-                    "classification": classification,
-                    "raw_imports": raw_imports,
-                    "is_package": is_package,
-                    "file_path": source_file.path 
-                }
+            # === PHASE 3: EXPAND DEPENDENCIES (Domain Logic) ===
+            if import_depth > 0:
+                self.dependency_service.expand_visibility_by_imports(
+                    graph=graph,
+                    registry=registry,
+                    initial_budget=import_depth,
+                )
 
-            # --- Pass 2: Graph Construction ---
-            graph = self._build_graph(registry)
+            # === PHASE 4: CONSTRUCT VISIBLE TREE ===
+            project_tree = ProjectStructureTree()
             
-            return ScanResult(graph=graph, source_tree=source_tree)
+            for node in graph.visible_nodes:
+                module_vo = registry.get(node.module_path)
+                if module_vo:
+                    project_tree.add_module(module_vo, scan_root, dirs_only)
+            
+            return ScanResult(graph=graph, source_tree=project_tree.to_dict())
 
-        except ScannerDomainError as de:
-            raise ProjectScanError(root_path=str(root_path), details=str(de)) from de
         except Exception as e:
-            raise ProjectScanError(root_path=str(root_path), details=str(e)) from e
+            raise ProjectScanError(root_path=str(focus_path), details=str(e)) from e
 
-    # ... (Rest of private methods: _build_graph, _add_to_tree, etc. remain unchanged)
-    
-    def _build_graph(self, registry: Dict[str, Dict]) -> DependencyGraph:
-        # (Same implementation as previous response)
-        nodes = {}
-        for mod_path, data in registry.items():
-            if data["is_package"]: continue 
-            cls: ClassificationResultVo = data["classification"]
+    def _ingest_file(
+        self,
+        source_file,
+        project_root: Path,
+        registry: Dict[str, ScannedModuleVo],
+    ) -> None:
+        classification = self.classifier.execute(source_file.path, project_root)
+
+        logical_path = self.module_resolver.calculate_logical_path(
+            source_file.path, project_root
+        )
+        if not logical_path:
+            return
+
+        raw_imports = []
+        if source_file.path.suffix == ".py":
+            raw_imports = self.parser.parse_imports(
+                source_file.content, source_file.path, logical_path
+            )
+
+        module_vo = ScannedModuleVo(
+            logical_path=logical_path,
+            file_path=source_file.path,
+            content=source_file.content,
+            classification=classification,
+            raw_imports=raw_imports,
+        )
+        registry[logical_path] = module_vo
+
+    def _build_initial_graph(self, registry: Dict[str, ScannedModuleVo], scan_root: Path) -> DependencyGraph:
+        graph = DependencyGraph()
+        for mod_path, module_vo in registry.items():
+            cls = module_vo.classification
             node = DependencyNode(
                 module_path=mod_path,
                 context=cls.context_name,
                 layer=cls.layer,
                 component_type=cls.component_type,
                 scope=cls.scope,
-                imports=[] 
+                is_visible=False,
             )
-            nodes[mod_path] = node
+            graph.add_node(node)
 
-        for mod_path, node in list(nodes.items()):
-            raw_data = registry.get(mod_path)
-            if not raw_data: continue
-            
+        # Link Edges with Normalization & Symbol Extraction
+        root_dir_name = scan_root.name 
+
+        for node in graph.all_nodes:
+            module_vo = registry.get(node.module_path)
+            if not module_vo:
+                continue
+
             resolved_links = []
-            for imp in raw_data["raw_imports"]:
-                imp: ImportedModuleVo 
-                names_to_resolve = imp.imported_names if imp.imported_names else [None]
+            for imp in module_vo.raw_imports:
+                target_path = imp.module_path
+                target_vo = registry.get(target_path)
                 
-                for imported_name in names_to_resolve:
-                    target_path = imp.module_path
-                    target_data = registry.get(target_path)
-                    real_target_path = target_path
+                # --- PATH NORMALIZATION ---
+                if not target_vo:
+                    normalized = self._normalize_import_path(target_path, root_dir_name)
+                    if normalized and normalized in registry:
+                        target_path = normalized
+                        target_vo = registry.get(target_path)
+                # --------------------------
 
-                    if target_data:
-                        if target_data["is_package"] and imported_name:
-                            re_export_path = self._find_reexport_in_package(target_data, imported_name)
-                            if re_export_path:
-                                real_target_path = self._resolve_relative_inside_init(target_path, re_export_path)
-                    
-                    final_node_data = registry.get(real_target_path)
-                    if final_node_data:
-                        tgt_cls = final_node_data["classification"]
-                        if real_target_path == mod_path: continue
-                        
-                        link = DependencyLink(
-                            source_module=mod_path,
-                            target_module=real_target_path,
+                if target_vo:
+                    tgt_cls = target_vo.classification
+                    resolved_links.append(
+                        DependencyLink(
+                            source_module=node.module_path,
+                            target_module=target_path,
                             target_context=tgt_cls.context_name,
-                            target_layer=self._get_layer_value(tgt_cls.layer),
-                            target_type=self._enum_to_str(tgt_cls.component_type)
+                            target_layer=str(tgt_cls.layer),
+                            target_type=str(tgt_cls.component_type),
+                            imported_symbols=imp.imported_names # COPY SYMBOLS
                         )
-                        resolved_links.append(link)
+                    )
             
-            unique_links = {l.target_module: l for l in resolved_links}
-            if unique_links:
-                nodes[mod_path] = replace(node, imports=list(unique_links.values()))
+            # Merge duplicate links
+            unique_links_map = {}
+            for link in resolved_links:
+                if link.target_module not in unique_links_map:
+                    unique_links_map[link.target_module] = link
+                else:
+                    existing = unique_links_map[link.target_module]
+                    merged_symbols = list(set(existing.imported_symbols + link.imported_symbols))
+                    unique_links_map[link.target_module] = DependencyLink(
+                        source_module=existing.source_module,
+                        target_module=existing.target_module,
+                        target_context=existing.target_context,
+                        target_layer=existing.target_layer,
+                        target_type=existing.target_type,
+                        imported_symbols=merged_symbols
+                    )
 
-        return DependencyGraph(nodes=nodes)
+            node.imports = list(unique_links_map.values())
 
-    def _find_reexport_in_package(self, package_data: Dict, name: str) -> Optional[str]:
-        imports: List[ImportedModuleVo] = package_data["raw_imports"]
-        for imp in imports:
-            if name in imp.imported_names:
-                return imp.module_path
-        return None
+        return graph
 
-    def _resolve_relative_inside_init(self, package_path: str, import_path: str) -> str:
-        if not import_path.startswith("."):
-            return import_path
-        return f"{package_path}{import_path}"
-
-    def _calculate_module_path(self, file_path: Path, root_path: Path) -> Optional[str]:
-        try:
-            rel_path = file_path.relative_to(root_path)
-            parts = list(rel_path.with_suffix("").parts)
-            if parts and parts[-1] == "__init__":
-                parts = parts[:-1]
-            return ".".join(parts)
-        except ValueError:
+    def _normalize_import_path(self, import_path: str, root_dir_name: str) -> str | None:
+        parts = import_path.split(".")
+        if not parts:
             return None
-
-    def _add_to_tree(
-        self, 
-        tree: Dict, 
-        file_path: Path, 
-        root_path: Path, 
-        content: str, 
-        dirs_only: bool
-    ):
-        try:
-            rel_path = file_path.relative_to(root_path)
-        except ValueError:
-            return
-        parts = rel_path.parts
-        current = tree
-        for part in parts[:-1]:
-            current = current.setdefault(part, {})
-        current[parts[-1]] = "<Some Content>" if dirs_only else content
-
-    def _get_layer_value(self, layer_enum) -> str:
-        return layer_enum.value if hasattr(layer_enum, "value") else str(layer_enum)
-
-    def _enum_to_str(self, enum_val) -> str:
-        if hasattr(enum_val, "value"): return enum_val.value
-        return str(enum_val)
+        if parts[0] == root_dir_name:
+            return ".".join(parts[1:])
+        return None

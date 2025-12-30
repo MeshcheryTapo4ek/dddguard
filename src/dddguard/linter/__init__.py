@@ -1,4 +1,6 @@
-from .composition import LinterProvider, LinterContainer, CheckProjectUseCase
+from .composition.container import LinterContainer, LinterProvider
 
-
-__all__ = ["LinterProvider", "LinterContainer", "CheckProjectUseCase"]
+__all__ = [
+    "LinterContainer",
+    "LinterProvider",
+]

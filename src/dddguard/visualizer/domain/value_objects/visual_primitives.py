@@ -1,48 +1,40 @@
 from dataclasses import dataclass, field
-from typing import List, Tuple, Dict, Optional
+from typing import List, Dict, Union, Optional
 
-from dddguard.shared import ContextLayerEnum
+from dddguard.shared import LayerEnum
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
-class Box:
+class VisualElement:
     """
-    Value Object: Represents a rectangular node on the canvas.
-    Contains geometric data and minimal metadata for linking.
+    Base value object for any element in the diagram (Node or Container).
+    Position (x, y) is relative to its parent container.
     """
     x: float
     y: float
     width: float
     height: float
     label: str
-    color: str = "#ffffff"
-    
-    # Metadata for linking (Reference to the source module)
-    id: str = ""
-    layer: ContextLayerEnum | str = ""
-    raw_type: str = ""
-    context: str = "" 
-    
-    # Minimal import info for rendering arrows
-    # format: [{"module": "target.path"}, ...]
-    outgoing_imports: List[Dict[str, str]] = field(default_factory=list)
-
-    @property
-    def center(self) -> Tuple[float, float]:
-        return (self.x + self.width / 2, self.y + self.height / 2)
+    id: str  # Unique identifier for edge linking
+    color: str = "none"
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
-class ZoneBackground:
+class LeafNode(VisualElement):
     """
-    Value Object: A colored background rectangle for a specific zone.
-    Used to visually group related layers (e.g., "Driving Adapters").
+    Represents an atomic code component (File/Module).
     """
-    x_rel: float
-    y_rel: float
-    width: float
-    height: float
-    color: str
-    label: Optional[str] = None
-    label_align: str = "left"
-    side: str = "center"
+    layer: Union[LayerEnum, str]
+    raw_type: str
+    context: str
+    outgoing_imports: List[Dict[str, str]] = field(default_factory=list)
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class VisualContainer(VisualElement):
+    """
+    Represents a visual grouping (Folder, Cluster, or Wrapper).
+    """
+    children: List[Union['VisualContainer', 'LeafNode']] = field(default_factory=list)
+    is_visible: bool = True
+    internal_padding: float = 0.6

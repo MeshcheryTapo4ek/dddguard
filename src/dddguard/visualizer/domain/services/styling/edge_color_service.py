@@ -1,63 +1,72 @@
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Optional
 import colorsys
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class EdgeColorService:
     """
-    Domain Service: Generates deterministic colors for edges.
-    Uses Golden Ratio for distinct nodes, and Analogous Spread for bundled edges.
-    """
-    base_saturation: float = 0.85
+    Domain Service: Generates colors for edges using the "Sharper Spectral" strategy.
     
-    _fallback_color: Final[str] = "#444444"
+    Logic:
+    1. Simple Nodes (<= 1 outgoing edge):
+       - Colored Neutral Gray (Quiet).
+       
+    2. Complex Nodes (> 1 outgoing edges):
+       - Assigned a unique Hue using the Golden Ratio. 
+       - This ensures maximal contrast between consecutive nodes (Sharp transitions).
+       - Edges within the same bundle share the Hue but vary in Brightness.
+    """
+
+    # Configuration
+    base_saturation: float = 0.85
+    base_value: float = 0.70
+    
+    # Colors
+    QUIET_COLOR: Final[str] = "#B0B0B0"
+    
+    # Magic Number for sharp color transitions (Golden Angle ~137.5 degrees)
     _golden_ratio_conjugate: Final[float] = 0.618033988749895
+    
+    # Bundle variation
+    bundle_val_spread: float = 0.35  # Spread brightness significantly for distinction
 
-    # Configuration for bundles (multiple arrows from same node)
-    bundle_hue_spread: float = 0.08   # Spread hue by +/- 4% (creates analogous colors)
-    bundle_val_spread: float = 0.4    # Spread brightness significantly (Dark <-> Light)
-
-    def get_color_for_source(
+    def get_color(
         self,
-        node_index: int,
-        total_nodes: int,
+        *,
+        spectral_index: Optional[int],
+        total_complex_nodes: int,
         edge_index: int = 0,
         total_edges_from_node: int = 1,
     ) -> str:
         """
-        Returns a hex color string.
-        Logic:
-        1. Node Identity: Golden Ratio Hue (High contrast between neighbors).
-        2. Bundle Identity: Analogous Hue Shift + Brightness Spread (High contrast within bundle).
+        Calculates the hex color.
         """
-        if total_nodes <= 0:
-            return self._fallback_color
+        # 1. Simple Case
+        if spectral_index is None:
+            return self.QUIET_COLOR
 
-        # 1. Base Hue (Golden Angle)
-        base_hue = (float(node_index) * self._golden_ratio_conjugate) % 1.0
+        if total_complex_nodes <= 0:
+            return self.QUIET_COLOR
 
-        hue = base_hue
+        # 2. Complex Case: Sharp Golden Ratio Hue
+        # Instead of linear division (Rainbow), we jump by the Golden Ratio.
+        # This guarantees that index N and N+1 have very different colors.
+        hue = (float(spectral_index) * self._golden_ratio_conjugate) % 1.0
+        
         saturation = self.base_saturation
-        value = 0.75 # Default brightness base
+        value = self.base_value
 
-        # 2. Bundle Variation (if multiple edges)
+        # 3. Bundle Variation (Brightness spread within the bundle)
         if total_edges_from_node > 1:
-            # Normalized factor from -0.5 (first edge) to +0.5 (last edge)
             div = float(total_edges_from_node - 1)
-            if div == 0: div = 1.0
+            # Factor from -0.5 to +0.5
+            factor = (float(edge_index) / div) - 0.5 if div > 0 else 0.0
             
-            factor = (float(edge_index) / div) - 0.5
-
-            # A. Shift Hue slightly (e.g. Blue -> Teal ... Blue -> Purple)
-            # This makes individual lines easy to trace
-            hue = (base_hue + (factor * self.bundle_hue_spread)) % 1.0
-
-            # B. Shift Value (Brightness) aggressively
-            # Range: roughly 0.55 (Dark) to 0.95 (Bright)
-            value = 0.75 + (factor * self.bundle_val_spread)
+            # Shift Value (Brightness)
+            value = self.base_value + (factor * self.bundle_val_spread)
             
-            # Clamp value to stay visible on white background
+            # Clamp value
             value = max(0.4, min(0.95, value))
 
         return self._hsv_to_hex(hue, saturation, value)

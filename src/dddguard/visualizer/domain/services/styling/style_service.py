@@ -1,70 +1,93 @@
 from dataclasses import dataclass
 from typing import Dict, ClassVar
-from dddguard.shared import ContextLayerEnum
+
+from dddguard.shared import LayerEnum, DirectionEnum
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class StyleService:
     """
     Domain Service: Configuration provider for visual styles.
-    Updated for larger nodes and better spacing.
     """
-    # --- Dimensions  ---
-    NODE_HEIGHT: ClassVar[float] = 1.6 
-    
-    # Base node width
-    MIN_NODE_WIDTH: ClassVar[float] = 3.5
-    
-    # Minimum width for the Driving/Driven background blocks
-    MIN_BLOCK_WIDTH: ClassVar[float] = 5.5 
-    
-    # --- Spacing (Increased indents) ---
-    NODE_GAP_X: ClassVar[float] = 0.8         
-    NODE_GAP_Y: ClassVar[float] = 0.8         
-    ROW_PAD_Y: ClassVar[float] = 1.0          # Indent inside the row
-    ZONE_GAP_Y: ClassVar[float] = 0.6         # Indent between zones
-    
-    HEADER_HEIGHT: ClassVar[float] = 1.8
-    TOWER_PAD_X: ClassVar[float] = 2.5
-    ZONE_HEADER_WIDTH: ClassVar[float] = 2.8
-    
-    CHAR_WIDTH_FACTOR: ClassVar[float] = 0.17
-    NODE_PAD_X_INNER: ClassVar[float] = 0.6
-    
-    # Gap between Driving and Driven blocks
-    SPLIT_GAP_X: ClassVar[float] = 0.6 
-    
-    # Padding inside the colored block (around the nodes)
-    BLOCK_PAD_X: ClassVar[float] = 0.8
 
-    # --- Colors (Vivid Palette) ---
-    NODE_COLORS: ClassVar[Dict[ContextLayerEnum, str]] = {
-        ContextLayerEnum.DOMAIN: "#80d8ff",            # Bright Light Blue
-        ContextLayerEnum.APP: "#ea80fc",               # Bright Purple
-        ContextLayerEnum.DRIVING_ADAPTERS: "#b9f6ca",  # Bright Mint Green
-        ContextLayerEnum.DRIVEN_ADAPTERS: "#ffe57f",   # Bright Amber
-        ContextLayerEnum.DRIVING_PORTS: "#cfd8dc",     # Blue Grey
-        ContextLayerEnum.DRIVEN_PORTS: "#cfd8dc",
-        ContextLayerEnum.COMPOSITION: "#ff8a80",       # Red Accent
-        ContextLayerEnum.OTHER: "#ffffff"
+    NODE_HEIGHT: ClassVar[float] = 1.6
+    MIN_NODE_WIDTH: ClassVar[float] = 3.0
+    MIN_BLOCK_WIDTH: ClassVar[float] = 4.0
+
+    # Containers: keep padding for node spacing, but no gaps between nested containers
+    CONTAINER_PAD_X: ClassVar[float] = 0.6
+    CONTAINER_PAD_Y: ClassVar[float] = 0.6
+
+    CONTAINER_GAP_X: ClassVar[float] = 0.0
+    CONTAINER_GAP_Y: ClassVar[float] = 0.0
+
+    # Leaves: keep gaps for readability/arrows
+    LEAF_GAP_X: ClassVar[float] = 0.5
+    LEAF_GAP_Y: ClassVar[float] = 0.5
+
+    ZONE_GAP_Y: ClassVar[float] = 0.5
+    ROW_GAP_Y: ClassVar[float] = 0.5
+    TOWER_PAD_X: ClassVar[float] = 2.0
+    
+
+    CHAR_WIDTH_FACTOR: ClassVar[float] = 0.15
+    NODE_PAD_X_INNER: ClassVar[float] = 0.4
+
+    HEADER_HEIGHT: ClassVar[float] = 1.2
+    ZONE_HEADER_WIDTH: ClassVar[float] = 1.5
+
+    # Reserved top area inside split backgrounds for DRIVING/DRIVEN labels
+    SPLIT_LABEL_HEIGHT: ClassVar[float] = 0.8
+
+    DEFAULT_COLOR: ClassVar[str] = "#ffffff"
+
+    NODE_COLORS: ClassVar[Dict[str, str]] = {
+        "DOMAIN": "#80d8ff",
+        "APP": "#ea80fc",
+
+        "ADAPTERS_DRIVING": "#b9f6ca",
+        "ADAPTERS_DRIVEN": "#ffe57f",
+        "ADAPTERS_ANY": "#fff9c4",
+
+        "PORTS_DRIVING": "#b3e5fc",
+        "PORTS_DRIVEN": "#cfd8dc",
+        "PORTS_ANY": "#eceff1",
+
+        "COMPOSITION": "#ff8a80",
+        "GLOBAL": "#e0e0e0",
     }
 
     ZONE_BG_COLORS: ClassVar[Dict[str, str]] = {
-        "DRIVING_BG": "#ccfccb",    # Vivid Pale Green
-        "DRIVEN_BG": "#ffecb3",     # Vivid Pale Orange
-        "APP_BG": "#f3e5f5",        
-        "DOMAIN_BG": "#e1f5fe",        
-        "COMPOSITION_BG": "#ffebee", 
-        "OTHER": "#fafafa"
+        "ADAPTERS_BG": "#fff8e1",
+        "PORTS_BG": "#eceff1",
+        "APP_BG": "#f3e5f5",
+        "DOMAIN_BG": "#e1f5fe",
+        "COMPOSITION_BG": "#ffebee",
+        "OTHER": "#fafafa",
+
+        "ADAPTERS_DRIVING_BG": "#e8f5e9",
+        "ADAPTERS_DRIVEN_BG": "#fffde7",
+
+        "PORTS_DRIVING_BG": "#e1f5fe",
+        "PORTS_DRIVEN_BG": "#eceff1",
     }
 
-    def get_node_color(self, layer: ContextLayerEnum | str) -> str:
-        if isinstance(layer, str):
-            try:
-                layer = ContextLayerEnum(layer)
-            except ValueError:
-                return "#ffffff"
-        return self.NODE_COLORS.get(layer, "#ffffff")
+    def get_node_color(self, layer: LayerEnum, direction: DirectionEnum) -> str:
+        if layer == LayerEnum.ADAPTERS:
+            if direction == DirectionEnum.DRIVING:
+                return self.NODE_COLORS["ADAPTERS_DRIVING"]
+            if direction == DirectionEnum.DRIVEN:
+                return self.NODE_COLORS["ADAPTERS_DRIVEN"]
+            return self.NODE_COLORS["ADAPTERS_ANY"]
+
+        if layer == LayerEnum.PORTS:
+            if direction == DirectionEnum.DRIVING:
+                return self.NODE_COLORS["PORTS_DRIVING"]
+            if direction == DirectionEnum.DRIVEN:
+                return self.NODE_COLORS["PORTS_DRIVEN"]
+            return self.NODE_COLORS["PORTS_ANY"]
+
+        return self.NODE_COLORS.get(layer.value, self.DEFAULT_COLOR)
 
     def format_label(self, module_path: str, type_name: str) -> str:
         simple_name = module_path.split(".")[-1]

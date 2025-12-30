@@ -1,32 +1,43 @@
-from .value_objects.visual_primitives import Box, ZoneBackground
-from .aggregates.context_tower_aggregate import ContextTower, TowerZone
+from .value_objects.visual_primitives import VisualElement, LeafNode, VisualContainer
+from .value_objects.options import VisualizationOptions
+from .value_objects.graph import DependencyGraph, DependencyNode, DependencyLink
+from .aggregates.context_tower_aggregate import ContextTower, TowerZone, ZoneBackground
 
 from .services.zone_builder_service import ZoneBuilderService
 from .services.styling import StyleService, EdgeColorService, EdgeRoutingService
-from .services.horizontal_aligner import HorizontalAligner
-from .services.vertical_stacker import VerticalStacker
-
+from .services.placement.node_placement_service import NodePlacementService
+from .services.grouping.node_grouping_service import NodeGroupingService
+from .services.optimization import (
+    OptimizationConfig,
+    ContainerOptimizationService,
+    FlowPackingService,
+)
 from .errors import VisualizerDomainError, LayoutCalculationError
 
 __all__ = [
     # Primitives
-    "Box", 
-    "ZoneBackground",
-    
+    "VisualElement",
+    "LeafNode",
+    "VisualContainer",
+    # Graph
+    "DependencyGraph",
+    "DependencyNode",
+    "DependencyLink",
     # Aggregates
-    "ContextTower", 
+    "ContextTower",
     "TowerZone",
-    
+    "ZoneBackground", 
     # Services
-    "TowerLayoutService", 
     "ZoneBuilderService",
-    "StyleService", 
-    "EdgeColorService", 
+    "StyleService",
+    "EdgeColorService",
     "EdgeRoutingService",
-    "HorizontalAligner",
-    "VerticalStacker",
-    
+    "NodePlacementService",
+    "NodeGroupingService",
+    "OptimizationConfig",
+    "ContainerOptimizationService",
+    "FlowPackingService",
     # Errors
-    "VisualizerDomainError", 
+    "VisualizerDomainError",
     "LayoutCalculationError",
 ]

@@ -1,5 +1,0 @@
-from typing import Protocol
-
-class INotificationGateway(Protocol):
-    def send_email(self, recipient: str, message: str) -> None:
-        ...

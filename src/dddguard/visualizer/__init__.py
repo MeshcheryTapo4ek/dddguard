@@ -1,4 +1,4 @@
-from .container import (
+from .composition.container import (
     VisualizerProvider,
     VisualizerContainer,
     IDiagramRenderer,

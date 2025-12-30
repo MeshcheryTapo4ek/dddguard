@@ -1,13 +1,9 @@
-from .value_objects import RenderedFileVo, TemplateDefinition, CategoryDefinition
+from .value_objects import ScaffolderFileVo
 from .errors import ScaffolderDomainError
-from .services import TemplateCompositor
+from .assets import DEFAULT_CONFIG_TEMPLATE
 
 __all__ = [
-    "RenderedFileVo",
-    "TemplateDefinition",
-    "CategoryDefinition",
-     
+    "ScaffolderFileVo",
     "ScaffolderDomainError",
-    
-    "TemplateCompositor",
+    "DEFAULT_CONFIG_TEMPLATE",
 ]

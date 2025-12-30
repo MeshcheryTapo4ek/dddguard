@@ -1,7 +1,3 @@
-from .visualizer_controller import VisualizerController
-from .errors import VisualizerAdapterError
+from .cli import register_commands, run_viz_directory_flow, run_viz_project_flow
 
-__all__ = [
-    "VisualizerController",
-    "VisualizerAdapterError",
-]
+__all__ = ["register_commands", "run_viz_directory_flow", "run_viz_project_flow"]
