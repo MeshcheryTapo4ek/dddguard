@@ -13,7 +13,7 @@ console = Console()
 
 def render_config_info(config, theme: GuardTheme = DEFAULT_THEME):
     """
-    Renders detailed configuration info: Source, Tests, Docs.
+    Renders detailed configuration info: Source, Tests, Docs, Macros.
     """
     color = theme.primary_color
 
@@ -52,6 +52,18 @@ def render_config_info(config, theme: GuardTheme = DEFAULT_THEME):
 
     if hasattr(config.project, "docs_dir"):
         grid.add_row("📚 Docs:", fmt_path(config.project.docs_dir))
+    
+    # --- MACRO CONTEXTS DISPLAY ---
+    macros = config.project.macro_contexts
+    if macros:
+        # Spacer
+        grid.add_row("", "") 
+        first = True
+        for zone, folder in macros.items():
+            label = "🌐 Macro Zones:" if first else ""
+            # Format: "scanner -> src/scanner"
+            grid.add_row(label, f"[cyan bold]{zone.upper()}[/] ➜ [dim]{folder}[/]")
+            first = False
 
     console.print(
         Panel(
@@ -68,7 +80,7 @@ def render_dashboard(
     config,
     config_path: Optional[Path],
     theme: GuardTheme = DEFAULT_THEME,
-    show_context: bool = True,  # <--- NEW PARAMETER
+    show_context: bool = True,
 ):
     """
     Main dashboard renderer.
@@ -114,6 +126,11 @@ def render_dashboard(
         grid.add_row("Project:", root.name)
         grid.add_row("Source:", f"[{color}]{src_str}[/]")
         grid.add_row("Config:", f"[dim]{config_path.name}[/]")
+
+        # Quick Macro summary in Dashboard
+        macro_count = len(config.project.macro_contexts)
+        if macro_count > 0:
+             grid.add_row("Macros:", f"[{color}]{macro_count} defined[/]")
 
         content.add_row(Align.center(grid))
 

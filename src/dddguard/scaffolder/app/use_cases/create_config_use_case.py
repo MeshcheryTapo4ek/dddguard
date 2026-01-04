@@ -30,4 +30,8 @@ class CreateConfigUseCase:
             self.fs_gateway.write_file(file_vo)
 
         except Exception as e:
-            raise ScaffolderAppError(f"Failed to generate config: {e}") from e
+            # Updated: Pass original_error for traceability
+            raise ScaffolderAppError(
+                message=f"Failed to generate config: {e}", 
+                original_error=e
+            ) from e

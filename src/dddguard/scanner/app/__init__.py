@@ -1,15 +1,10 @@
-from .use_cases.classify_file_use_case import ClassifyFileUseCase
-from .use_cases.scan_project_use_case import ScanProjectUseCase
-from .use_cases.classify_tree_use_case import ClassifyTreeUseCase
-from .interfaces import IProjectReader
-from .errors import ScannerAppError, ProjectScanError, ClassificationError
+from .interfaces import IDetectionGateway, IClassificationGateway
+from .use_cases.run_scan_use_case import RunScanUseCase
+from .use_cases.inspect_tree_use_case import InspectTreeUseCase
 
 __all__ = [
-    "ClassifyFileUseCase",
-    "ScanProjectUseCase",
-    "ClassifyTreeUseCase",
-    "IProjectReader",
-    "ScannerAppError",
-    "ProjectScanError",
-    "ClassificationError",
+    "IDetectionGateway",
+    "IClassificationGateway",
+    "RunScanUseCase",
+    "InspectTreeUseCase",
 ]

@@ -1,89 +1,55 @@
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, List, Dict, Optional
-
-from dddguard.shared.domain import (
-    ScopeEnum,
-    LayerEnum,
-    ComponentPassport,
-    ComponentType,
-)
-
+from typing import Dict, Any, List
+from dddguard.shared.domain import ComponentPassport
+from ..classification.domain import EnrichedNodeVo
 
 @dataclass(frozen=True, kw_only=True, slots=True)
-class SourceFileVo:
-    """Represents a source file and its content."""
-
-    path: Path
-    content: str
+class DetectionResultVo:
+    """
+    Domain representation of the physical scan result.
+    Decouples App layer from Detection Context Schemas.
+    """
+    graph_nodes: Dict[str, Any]  # Raw nodes still use dicts as they are untyped at this stage
+    source_tree: Dict[str, Any]
+    stats: Dict[str, int]
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class ClassificationResultVo:
-    """Result of the SRM v2.0 identification engine."""
-
-    scope: ScopeEnum
-    layer: LayerEnum
-    component_type: ComponentType
-    context_name: str
-    is_definitive: bool = False
+    """
+    Domain representation of the logical classification result.
+    NOW STRICTLY TYPED: No more Dict[str, Any].
+    """
+    nodes: Dict[str, EnrichedNodeVo] 
+    unknown_count: int
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
-class ImportedModuleVo:
-    """Raw import statement metadata."""
-
-    module_path: str
-    lineno: int
-    is_relative: bool
-    imported_names: List[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True, kw_only=True, slots=True)
-class ScannedModuleVo:
+class ScanReportVo:
     """
-    Aggregate Object representing a fully analyzed Python module/package.
-    Contains raw data before Graph Node construction.
+    Aggregate result of the Scanner process.
     """
-
-    logical_path: str
-    file_path: Path
-    content: str
-    classification: ClassificationResultVo
-    raw_imports: List[ImportedModuleVo] = field(default_factory=list)
-
-    @property
-    def is_package(self) -> bool:
-        return self.file_path.name == "__init__.py"
-
-
-@dataclass(frozen=True, kw_only=True, slots=True)
-class DependencyLink:
-    """
-    Uni-directional dependency between two modules.
-    """
-
-    source_module: str
-    target_module: str
-    target_context: Optional[str] = None
-    target_layer: Optional[str] = None
-    target_type: Optional[str] = None
+    source_tree: Dict[str, Any]
+    dependency_graph: Dict[str, Any] # Kept flexible for JSON serialization, but populated by strict objects
     
-    # NEW: Track which specific symbols are imported through this link
-    imported_symbols: List[str] = field(default_factory=list)
+    # Stats
+    context_count: int
+    file_count: int
+    snapshot_file_count: int
+    unclassified_count: int
+    
+    total_lines_of_code: int = 0
+    success: bool = True
+    error_message: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class ClassifiedTreeVo:
+    """
+    Recursive tree structure for visualization.
+    """
     name: str
     is_dir: bool
     path_display: str
     passport: ComponentPassport
     children: List["ClassifiedTreeVo"] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class ScanResult:
-    """Aggregate result of a project scan."""
-    graph: "DependencyGraph" 
-    source_tree: Dict[str, Any]

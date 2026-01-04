@@ -24,6 +24,7 @@ class ComponentPassport:
 
     scope: ScopeEnum
     context_name: str | None
+    macro_zone: str | None
     layer: LayerEnum
     direction: DirectionEnum
     component_type: ComponentType

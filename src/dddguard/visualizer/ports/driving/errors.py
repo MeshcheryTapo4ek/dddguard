@@ -1,14 +1,15 @@
-from dataclasses import dataclass
+from typing import Optional
+from dddguard.shared.helpers.generics import GenericPortError
 
 
-@dataclass
-class VisualizerAdapterError(Exception):
+class VisualizerPortError(GenericPortError):
     """
-    Base exception for Visualizer Driving Adapters.
-    Wraps application errors for the Port layer.
+    Base exception for Visualizer Port operations.
+    Replaces the old VisualizerAdapterError.
     """
-
-    message: str
-
-    def __post_init__(self):
-        super().__init__(self.message)
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        super().__init__(
+            message=message,
+            context_name="Visualizer",
+            original_error=original_error
+        )

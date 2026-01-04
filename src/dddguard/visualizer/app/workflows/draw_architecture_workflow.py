@@ -25,7 +25,10 @@ class DrawArchitectureWorkflow:
         try:
             graph = self.scanner_gateway.get_dependency_graph(root_path)
         except Exception as e:
-            raise VisualizerAppError(f"Workflow failed at Scanning stage: {e}") from e
+            raise VisualizerAppError(
+                message=f"Workflow failed at Scanning stage: {e}",
+                original_error=e
+            ) from e
 
         # 2. Calculate Layout
         towers = self.calculate_layout.execute(graph)

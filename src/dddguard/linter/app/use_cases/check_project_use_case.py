@@ -44,8 +44,12 @@ class CheckProjectUseCase:
 
         except LinterDomainError as e:
             raise AnalysisExecutionError(
-                "rule_checking", f"Domain rule error: {e}"
+                step="rule_checking", 
+                original_error=e
             ) from e
 
         except Exception as e:
-            raise AnalysisExecutionError("unknown", str(e)) from e
+            raise AnalysisExecutionError(
+                step="unknown", 
+                original_error=e
+            ) from e

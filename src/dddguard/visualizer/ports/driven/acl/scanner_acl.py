@@ -41,7 +41,7 @@ class ScannerAcl(IScannerGateway):
         "INFRASTRUCTURE": LayerEnum.ADAPTERS,
         "INFRA": LayerEnum.ADAPTERS,
         "ADAPTERS": LayerEnum.ADAPTERS,
-        "INTERFACE": LayerEnum.PORTS,  # Common confusion point
+        "INTERFACE": LayerEnum.PORTS, 
         "INTERFACES": LayerEnum.PORTS,
         "WIRING": LayerEnum.COMPOSITION,
         "BOOTSTRAP": LayerEnum.COMPOSITION,
@@ -51,8 +51,6 @@ class ScannerAcl(IScannerGateway):
     def get_dependency_graph(self, root_path: Path) -> DependencyGraph:
         logger.info(f"ACL: Requesting dependency graph from Scanner for: {root_path}")
         try:
-            # FIX: Updated call signature to match new ScannerController API.
-            # Removed 'show_root' and 'show_shared' arguments.
             response: ScanResponseSchema = self.controller.scan_project(
                 target_path=root_path, 
                 scan_all=False
@@ -68,9 +66,7 @@ class ScannerAcl(IScannerGateway):
 
         except Exception as e:
             logger.error(f"ACL: Integration failed: {e}", exc_info=True)
-            raise ScannerIntegrationError(
-                original_error=f"Unexpected ACL error: {e}"
-            ) from e
+            raise ScannerIntegrationError(original_error=e) from e
 
     def _map_schema_to_domain(self, graph_dict: Dict[str, Any]) -> DependencyGraph:
         nodes: Dict[str, DependencyNode] = {}

@@ -35,18 +35,30 @@ from ..domain import (
 class VisualizerContainer:
     """
     Facade for the Visualizer Context.
+    Holds the controller and configuration to expose CLI commands.
     """
     controller: VisualizerController
     config: ConfigVo
 
     def register_commands(self, app: typer.Typer) -> None:
+        """
+        Delegates command registration to the driving adapter logic.
+        """
         driving_adapter.register_commands(app, self.controller, self.config)
 
 
 class VisualizerProvider(Provider):
+    """
+    DI Provider for the Visualizer Context.
+    """
+    
     scope = Scope.APP
 
-    # 1. Domain Layer (Services & Strategies)
+    # --- 1. Domain Layer (Services & Strategies) ---
+    
+    # MANUAL PROVIDERS (Primitives Protection):
+    # These services depend on primitives (float, int, bool) which breaks auto-wiring.
+    
     @provide
     def provide_style_service(self) -> StyleService:
         return StyleService()
@@ -60,17 +72,19 @@ class VisualizerProvider(Provider):
         return EdgeRoutingService()
 
     @provide
-    def provide_node_placement_service(self) -> NodePlacementService:
-        return NodePlacementService()
+    def provide_optimization_config(self) -> OptimizationConfig:
+        return OptimizationConfig()
 
-    @provide
-    def provide_node_grouping_service(self) -> NodeGroupingService:
-        return NodeGroupingService()
-    
     @provide
     def provide_flow_packing_service(self) -> FlowPackingService:
+        # Explicit instantiation allows 'aspect_ratio: float' to take its default value
         return FlowPackingService()
 
+    # AUTO-WIRED SERVICES:
+    # These services depend only on other injected classes, so auto-wiring is safe.
+    node_placement_service = provide(NodePlacementService)
+    node_grouping_service = provide(NodeGroupingService)
+    
     @provide
     def provide_zone_builder_service(
         self,
@@ -83,100 +97,38 @@ class VisualizerProvider(Provider):
             style=style,
             placement_service=placement,
             grouping_service=grouping,
-            packer=packer
+            packer=packer,
         )
+    container_optimizer = provide(ContainerOptimizationService)
+    
+    # Domain Workflows
+    optimize_tower_workflow = provide(FindOptimizedTowerWorkflow)
 
-    @provide
-    def provide_optimization_config(self) -> OptimizationConfig:
-        return OptimizationConfig()
-
-    @provide
-    def provide_container_optimization_service(
-        self,
-        style: StyleService,
-        cfg: OptimizationConfig,
-        packer: FlowPackingService,
-    ) -> ContainerOptimizationService:
-        return ContainerOptimizationService(style=style, config=cfg, packer=packer)
-
-    @provide
-    def provide_find_optimized_tower_workflow(
-        self,
-        optimizer: ContainerOptimizationService,
-    ) -> FindOptimizedTowerWorkflow:
-        return FindOptimizedTowerWorkflow(optimizer=optimizer)
-
-
-    # 2. Adapters Layer (Driven)
+    # --- 2. Adapters Layer (Driven) ---
     @provide
     def provide_renderer(
         self,
         style: StyleService,
-        edge_colors: EdgeColorService,
-        edge_routing: EdgeRoutingService,
+        color_service: EdgeColorService,
+        routing_service: EdgeRoutingService,
     ) -> IDiagramRenderer:
         return DrawioRenderer(
             style=style,
-            color_service=edge_colors,
-            routing_service=edge_routing,
+            color_service=color_service,
+            routing_service=routing_service,
         )
 
-    # ACL
-    @provide
-    def provide_scanner_gateway(self, controller: ScannerController) -> IScannerGateway:
-        return ScannerAcl(controller=controller)
+    # ACL: Bind ScannerAcl to IScannerGateway
+    # Dishka will automatically find ScannerController in the scope.
+    scanner_gateway = provide(ScannerAcl, provides=IScannerGateway)
 
-    # 3. App Layer (Use Cases & Workflow)
-    @provide
-    def provide_calculate_layout_use_case(
-        self,
-        style: StyleService,
-        builder: ZoneBuilderService,
-        optimize_tower: FindOptimizedTowerWorkflow,
-        packer: FlowPackingService,
-    ) -> CalculateLayoutUseCase:
-        return CalculateLayoutUseCase(
-            style=style,
-            builder=builder,
-            optimize_tower=optimize_tower,
-            packer=packer,
-        )
+    # --- 3. App Layer (Use Cases & Workflow) ---
+    calculate_layout_uc = provide(CalculateLayoutUseCase)
+    render_diagram_uc = provide(RenderDiagramUseCase)
+    draw_arch_workflow = provide(DrawArchitectureWorkflow)
 
-    @provide
-    def provide_render_diagram_use_case(
-        self,
-        renderer: IDiagramRenderer,
-    ) -> RenderDiagramUseCase:
-        return RenderDiagramUseCase(renderer=renderer)
+    # --- 4. Ports Layer (Driving) ---
+    controller = provide(VisualizerController)
 
-    @provide
-    def provide_draw_architecture_workflow(
-        self,
-        gateway: IScannerGateway,
-        calculate_layout: CalculateLayoutUseCase,
-        render_diagram: RenderDiagramUseCase,
-    ) -> DrawArchitectureWorkflow:
-        return DrawArchitectureWorkflow(
-            scanner_gateway=gateway,
-            calculate_layout=calculate_layout,
-            render_diagram=render_diagram,
-        )
-
-    # 4. Ports Layer (Driving)
-    @provide
-    def provide_visualizer_controller(
-        self, workflow: DrawArchitectureWorkflow, config: ConfigVo
-    ) -> VisualizerController:
-        return VisualizerController(workflow=workflow, config=config)
-
-    # 5. Context Root
-    @provide
-    def provide_container(
-        self,
-        controller: VisualizerController,
-        config: ConfigVo,
-    ) -> VisualizerContainer:
-        return VisualizerContainer(
-            controller=controller,
-            config=config,
-        )
+    # --- 5. Context Root ---
+    container = provide(VisualizerContainer)

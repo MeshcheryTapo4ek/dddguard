@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Set, Optional
+from typing import Set, Optional, Dict
 from pathlib import Path
 
 
@@ -95,6 +95,8 @@ class ProjectConfig:
     source_dir: str = "src"
     tests_dir: str = "tests"
     docs_dir: str = "docs"
+
+    macro_contexts: Dict[str, str] = field(default_factory=dict)
 
     project_root: Path = field(default_factory=Path.cwd)
 

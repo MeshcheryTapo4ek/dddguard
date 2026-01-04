@@ -1,9 +1,9 @@
 from .visualizer_controller import VisualizerController
-from .errors import VisualizerAdapterError
+from .errors import VisualizerPortError
 from .schemas import DrawOptionsDto
 
 __all__ = [
     "VisualizerController",
-    "VisualizerAdapterError",
+    "VisualizerPortError",
     "DrawOptionsDto"
 ]

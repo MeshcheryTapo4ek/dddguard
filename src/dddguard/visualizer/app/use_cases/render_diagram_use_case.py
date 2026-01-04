@@ -21,5 +21,4 @@ class RenderDiagramUseCase:
         try:
             self.renderer.render(towers, output_path, options)
         except Exception as e:
-            # Wrap infrastructure errors into clean App Errors
-            raise RenderingError(str(output_path), str(e)) from e
+            raise RenderingError(str(output_path), original_error=e) from e

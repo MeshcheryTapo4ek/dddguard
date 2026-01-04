@@ -1,11 +1,14 @@
-from dataclasses import dataclass
+from typing import Optional
+from dddguard.shared.helpers.generics import GenericDomainError
 
 
-@dataclass
-class ScaffolderDomainError(Exception):
-    """Base exception for Scaffolder Domain."""
-
-    message: str
-
-    def __post_init__(self):
-        super().__init__(self.message)
+class ScaffolderDomainError(GenericDomainError):
+    """
+    Base exception for Scaffolder Domain.
+    """
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        super().__init__(
+            message=message,
+            context_name="Scaffolder",
+            original_error=original_error
+        )

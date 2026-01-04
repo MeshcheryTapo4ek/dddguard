@@ -5,7 +5,7 @@ from dddguard.shared import ConfigVo
 from ...app import DrawArchitectureWorkflow, VisualizerAppError
 from ...domain import VisualizationOptions
 from .schemas import DrawOptionsDto
-from .errors import VisualizerAdapterError
+from .errors import VisualizerPortError
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -33,4 +33,4 @@ class VisualizerController:
         try:
             self.workflow.execute(target_path, domain_options)
         except VisualizerAppError as e:
-            raise VisualizerAdapterError(str(e)) from e
+            raise VisualizerPortError(e.message, original_error=e) from e

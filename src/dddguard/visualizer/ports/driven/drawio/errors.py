@@ -1,22 +1,13 @@
-from dataclasses import dataclass
+from dddguard.shared.helpers.generics import GenericAdapterError
 
 
-@dataclass
-class VisualizerAdapterError(Exception):
-    """Base exception for Visualizer Adapters."""
-
-    message: str
-
-    def __post_init__(self):
-        super().__init__(self.message)
-
-
-@dataclass
-class FileWriteError(VisualizerAdapterError):
-    """Raised when writing the XML file to disk fails."""
-
-    path: str
-    details: str
-
-    def __post_init__(self):
-        super().__init__(f"Could not write to file {self.path}: {self.details}")
+class FileWriteError(GenericAdapterError):
+    """
+    Raised when the renderer fails to write the XML file to disk.
+    """
+    def __init__(self, path: str, original_error: Exception):
+        super().__init__(
+            message=f"IO Error writing to {path}: {str(original_error)}",
+            context_name="Visualizer",
+            original_error=original_error
+        )

@@ -141,7 +141,7 @@ class DrawioRenderer(IDiagramRenderer):
                 f.write(xml_str)
 
         except IOError as e:
-            raise FileWriteError(str(output_path), str(e))
+            raise FileWriteError(str(output_path), e) from e
         except Exception:
             raise
 

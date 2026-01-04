@@ -7,7 +7,8 @@ from typing import List, Optional
 class ScanOptions:
     """
     Mutable configuration state for the Scan Wizard.
-    Used strictly within the Console Adapter to accumulate user choices.
+    Used strictly within the Console Adapter to accumulate user choices
+    before calling the Port.
     """
 
     target_path: Path
@@ -17,6 +18,8 @@ class ScanOptions:
     scan_all: bool = False
 
     # Filters
+    macro_contexts: Optional[List[str]] = None 
+    
     contexts: Optional[List[str]] = None
     layers: Optional[List[str]] = None  # None means ALL layers
     

@@ -2,7 +2,6 @@ import shutil
 import json
 import typer
 from pathlib import Path
-from rich.tree import Tree
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -20,26 +19,17 @@ from dddguard.shared import (
     YamlConfigLoader,
     LayerEnum,
     MatchMethod,
+    DirectionEnum,
 )
-from ....ports.driving.scanner_controller import (
-    ScannerController,
-    ScanResponseSchema,
-    ClassifiedNodeSchema,
-)
+
+from ....ports.driving import ScannerController, ScanResponseSchema, ClassifiedNodeSchema
 
 # Local Adapters
 from .scan_options import ScanOptions
 from .wizard import ScanSettingsWizard
-# CHANGED: Import from session_state instead of scan_history
 from .session_state import set_last_scan_options, get_last_scan_options
 
 console = Console()
-
-# CLASSIFICATION:
-# Scope: BOUNDED CONTEXT (Scanner)
-# Layer: ADAPTERS
-# Direction: DRIVING
-# Type: CLI (Entrypoint)
 
 
 def register_commands(app: typer.Typer, controller: ScannerController):
@@ -73,7 +63,7 @@ def register_commands(app: typer.Typer, controller: ScannerController):
         run_classify_directory_flow(controller)
 
 
-# --- INTERNAL FLOWS (Adapter Logic - Now Public for Root Usage) ---
+# --- INTERNAL FLOWS (Adapter Logic) ---
 
 
 def run_scan_directory_flow(controller: ScannerController, import_depth: int = 0):
@@ -122,7 +112,6 @@ def run_repeat_last_scan_flow(controller: ScannerController):
     """
     Immediately executes the last scan without the wizard.
     """
-    # CHANGED: Use in-memory getter
     last_opts = get_last_scan_options()
     if not last_opts:
         console.print("[red]❌ No previous scan history found in this session.[/]")
@@ -141,6 +130,7 @@ def _execute_scan(controller: ScannerController, opts: ScanOptions):
 
     with safe_execution(status_msg=f"Scanning... ({mode_msg}{depth_msg})"):
         # 4. CALL PORT (Controller)
+        # We pass the wizard options directly to the controller
         schema: ScanResponseSchema = controller.scan_project(
             target_path=opts.target_path,
             whitelist_contexts=opts.contexts,
@@ -150,7 +140,7 @@ def _execute_scan(controller: ScannerController, opts: ScanOptions):
             import_depth=opts.import_depth,
         )
 
-        # 5. Handle Side Effects
+        # 5. Handle Side Effects (Saving Report)
         with open(opts.output_json, "w", encoding="utf-8") as f:
             json.dump(schema.source_tree, f, indent=2, ensure_ascii=False)
 
@@ -218,16 +208,53 @@ def _render_success_report(dto: ScanResponseSchema, output_file: Path):
     console.print()
 
 
-def _render_classified_tree(dto: ClassifiedNodeSchema):
-    width = shutil.get_terminal_size((100, 20)).columns
-    tree = Tree(f"[bold cyan]SOURCE ROOT[/] ({dto.name})")
+def _render_classified_tree(root_node: ClassifiedNodeSchema):
+    """
+    Renders the architecture as a detailed table.
+    Columns: [Macro] [Context] [Layer] [Dir] | Tree | [Type] [Method]
+    """
+    
+    # --- 1. Setup Table ---
+    table = Table(
+        box=box.SIMPLE_HEAD, 
+        show_header=True, 
+        header_style="bold white",
+        expand=True,
+        padding=(0, 1)
+    )
+    
+    # Metadata Columns (Left)
+    table.add_column("Macro", style="dim", width=10, no_wrap=True)
+    table.add_column("Context", style="dim", width=12, no_wrap=True)
+    table.add_column("Layer", style="dim", width=12, no_wrap=True)
+    table.add_column("Dir", style="dim", width=3, justify="center")
+    
+    # Structure (Center)
+    table.add_column(f"Structure ({root_node.name})", no_wrap=True, )
+    
+    # Details (Right)
+    table.add_column("Type", style="bold", width=15)
+    
+    table.add_column("Method", justify="left", min_width=10)
 
-    def get_color(passport) -> str:
-        if (
-            passport.match_method == MatchMethod.UNKNOWN
-            or passport.layer == LayerEnum.UNDEFINED
-        ):
-            return "red"
+    # --- 2. Helper Logic ---
+
+    def _pick_color(name: str) -> str:
+        """Deterministically picks a distinct color for a given name."""
+        if not name or name == "Default":
+            return "dim white"
+            
+        # Distinct palette avoiding very dark colors
+        palette = [
+            "cyan", "magenta", "green", "yellow", 
+            "blue", "orange1", "plum1", "gold1", 
+            "spring_green1", "deep_sky_blue1"
+        ]
+        # Simple hash to pick index
+        idx = sum(ord(c) for c in name) % len(palette)
+        return palette[idx]
+
+    def get_layer_color(layer: LayerEnum) -> str:
         colors = {
             LayerEnum.DOMAIN: "dodger_blue1",
             LayerEnum.APP: "medium_purple1",
@@ -235,44 +262,121 @@ def _render_classified_tree(dto: ClassifiedNodeSchema):
             LayerEnum.ADAPTERS: "green3",
             LayerEnum.COMPOSITION: "gold1",
             LayerEnum.GLOBAL: "grey62",
+            LayerEnum.UNDEFINED: "red",
         }
-        return colors.get(passport.layer, "white")
+        return colors.get(layer, "white")
 
-    def format_passport_tag(p) -> Text:
-        color = get_color(p)
-        method = "S" if p.match_method == MatchMethod.STRUCTURAL else "N"
-        if p.match_method == MatchMethod.UNKNOWN:
-            method = "?"
+    def format_method(method: MatchMethod) -> str:
+        # FIX: Returning full names instead of abbreviations
+        if method == MatchMethod.STRUCTURAL:
+            return "[green]STRUCTURAL[/]" 
+        if method == MatchMethod.NAME:
+            return "[blue]NAME[/]"
+        return "[red]UNKNOWN[/]"
 
-        type_name = str(p.component_type).split(".")[-1][:10]
-        layer_name = str(p.layer.value)[:3].upper()
+    def format_layer_cell(passport) -> Text:
+        """Formats the Layer column with full name (e.g., DOMAIN)."""
+        if passport.layer == LayerEnum.UNDEFINED:
+            return Text("---", style="dim red")
+            
+        color = get_layer_color(passport.layer)
+        return Text(passport.layer.value, style=color)
 
-        tag = Text.assemble(
-            (f" {method} ", f"on {color} reverse"),
-            (f" {type_name} ", f"bold {color}"),
-            (f" {p.direction.value[:3]} ", "dim"),
-            (f" {layer_name} ", "italic grey62"),
-            (f" {p.context_name or '---'} ", "grey37"),
+    def format_direction_cell(passport) -> Text:
+        """Formats direction (In/Out)."""
+        if passport.direction == DirectionEnum.DRIVING:
+            return Text("In", style="green")
+        if passport.direction == DirectionEnum.DRIVEN:
+            return Text("Out", style="orange1")
+        return Text("", style="dim")
+
+    def format_macro_cell(passport) -> Text:
+        """Macro Zone with unique color."""
+        name = passport.macro_zone
+        if not name or name == "General":
+            return Text("Default", style="dim")
+        
+        color = _pick_color(name)
+        return Text(name.upper(), style=f"bold {color}")
+
+    def format_context_cell(passport) -> Text:
+        """Context Name with unique color."""
+        name = passport.context_name
+        if not name:
+            return Text("-", style="dim")
+            
+        color = _pick_color(name)
+        return Text(name, style=color)
+
+    # --- 3. Recursive Flattener ---
+    
+    def add_nodes_recursive(node: ClassifiedNodeSchema, prefix: str = "", is_last: bool = True, is_root: bool = False):
+        # Determine Tree Branch Character
+        connector = ""
+        if not is_root:
+            connector = "└── " if is_last else "├── "
+        
+        # --- Build Row Data ---
+        
+        # Col 1: Macro
+        macro_cell = format_macro_cell(node.passport)
+
+        # Col 2: Context
+        ctx_cell = format_context_cell(node.passport)
+        
+        # Col 3: Layer
+        layer_cell = format_layer_cell(node.passport)
+
+        # Col 4: Direction
+        dir_cell = format_direction_cell(node.passport)
+        
+        # Col 5: Tree Structure
+        tree_text = Text(prefix + connector, style="dim white")
+        name_style = "bold white" if node.is_dir else "white"
+        tree_text.append(node.name, style=name_style)
+        if node.is_dir:
+            tree_text.append("/", style="dim white")
+            
+        # Col 6: Component Type
+        type_str = str(node.passport.component_type).split(".")[-1]
+        type_color = get_layer_color(node.passport.layer)
+        
+        if node.passport.layer == LayerEnum.UNDEFINED and not node.is_dir:
+             type_cell = Text("UNKNOWN", style="bold red")
+        elif node.is_dir:
+             type_cell = Text("") 
+        else:
+             type_cell = Text(type_str, style=type_color)
+
+        # Col 7: Method
+        method_cell = format_method(node.passport.match_method) if not node.is_dir else ""
+
+        # Add Row
+        table.add_row(
+            macro_cell, 
+            ctx_cell, 
+            layer_cell, 
+            dir_cell, 
+            tree_text, 
+            type_cell, 
+            method_cell
         )
-        return tag
 
-    def add_branches(node_dto: ClassifiedNodeSchema, rich_node: Tree, depth: int = 0):
-        for child in node_dto.children:
-            label = Text(child.name)
-            if child.is_dir:
-                label.stylize("bold blue")
+        # --- Recurse ---
+        children_count = len(node.children)
+        for index, child in enumerate(node.children):
+            is_last_child = (index == children_count - 1)
+            
+            # Calculate next prefix
+            next_prefix = prefix
+            if not is_root:
+                next_prefix += "    " if is_last else "│   "
+            
+            add_nodes_recursive(child, next_prefix, is_last_child, is_root=False)
 
-            branch = rich_node.add(label)
-
-            if not child.is_dir:
-                passport_tag = format_passport_tag(child.passport)
-                current_line_len = len(child.name) + (depth * 4) + 4
-                padding_size = width - current_line_len - 35
-
-                label.append(" " * max(1, padding_size))
-                label.append(passport_tag)
-
-            add_branches(child, branch, depth + 1)
-
-    add_branches(dto, tree)
-    console.print(tree)
+    # --- 4. Execute & Print ---
+    add_nodes_recursive(root_node, is_root=True)
+    
+    console.print()
+    console.print(table)
+    console.print()

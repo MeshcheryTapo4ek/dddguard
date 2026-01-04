@@ -68,9 +68,6 @@ class YamlConfigLoader:
             project_root = Path(raw_root).resolve()
         else:
             # B. Fallback: Calculate relative to config file
-            # Default assumption: config is deep in docs/dddguard/ -> root is ../../
-            # If config is in root/, this might need adjustment, but generally works if config is in a subdir
-            # Let's be smarter: if config is in docs/dddguard, go up 2. If in root, go up 0.
             if config_file_path.parent.name == "dddguard":
                 project_root = config_file_path.parents[1].resolve()
                 if config_file_path.parents[1].name == "docs":
@@ -79,10 +76,13 @@ class YamlConfigLoader:
                 # Default safe fallback
                 project_root = config_file_path.parent.resolve()
 
+        macro_contexts = proj_data.get("macro_contexts", {})
+
         project_conf = ProjectConfig(
             source_dir=proj_data.get("source_dir", "src"),
             tests_dir=proj_data.get("tests_dir", "tests"),
             docs_dir=proj_data.get("docs_dir", "docs"),
+            macro_contexts=macro_contexts,
             project_root=project_root,
             config_file_path=config_file_path,
         )

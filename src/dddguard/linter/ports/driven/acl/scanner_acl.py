@@ -31,9 +31,7 @@ class ScannerAcl(IScannerGateway):
             return self._map_schema_to_domain(response.dependency_graph)
 
         except Exception as e:
-            raise ScannerIntegrationError(
-                original_error=f"Unexpected ACL error: {e}"
-            ) from e
+            raise ScannerIntegrationError(original_error=e) from e
 
     def _map_schema_to_domain(self, graph_dict: dict) -> List[ScannedNodeVo]:
         """

@@ -1,28 +1,25 @@
-from dataclasses import dataclass
+from typing import Optional
+from dddguard.shared.helpers.generics import GenericAdapterError
 
 
-@dataclass
-class ScannerAdapterError(Exception):
+class ScannerAdapterError(GenericAdapterError):
     """
-    Base exception for Driving Adapters (e.g. Controller failures).
-    Expected to be caught by Driving Ports (CLI).
+    Base exception for Scanner Adapters (ACL/Integration).
     """
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        super().__init__(
+            message=message,
+            context_name="Scanner",
+            original_error=original_error
+        )
 
-    message: str
 
-    def __post_init__(self):
-        super().__init__(self.message)
-
-
-@dataclass
-class FileSystemReadError(Exception):
+class GatewayIntegrationError(ScannerAdapterError):
     """
-    Failed to read file from disk (permissions, encoding, etc.).
-    Used by Driven Adapters.
+    Raised when an internal gateway (ACL) fails to communicate with a sub-context.
     """
-
-    path: str
-    original_error: str
-
-    def __post_init__(self):
-        super().__init__(f"Could not read file {self.path}: {self.original_error}")
+    def __init__(self, gateway_name: str, original_error: Exception):
+        super().__init__(
+            message=f"Integration failure in {gateway_name}: {str(original_error)}",
+            original_error=original_error
+        )

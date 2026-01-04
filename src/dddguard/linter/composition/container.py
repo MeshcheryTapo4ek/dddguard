@@ -2,10 +2,6 @@ from dataclasses import dataclass
 import typer
 from dishka import Provider, Scope, provide
 
-# External Context
-from dddguard.scanner import ScannerController
-from dddguard.shared import ConfigVo
-
 # Internal App Layer
 from ..app import CheckProjectUseCase, IScannerGateway
 
@@ -22,47 +18,38 @@ from ..ports.driven import ScannerAcl
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class LinterContainer:
-    """Facade for Linter Context."""
-
+    """
+    Facade for Linter Context.
+    """
     controller: LinterController
 
-    def register_commands(self, app: typer.Typer):
+    def register_commands(self, app: typer.Typer) -> None:
+        """
+        Delegates command registration to the driving adapter logic.
+        """
         driving_adapter.register_commands(app, self.controller)
 
 
 class LinterProvider(Provider):
+    """
+    DI Provider for the Linter Context.
+    Wires the Rule Engine and the ACL to the Scanner Context.
+    """
+    
     scope = Scope.APP
 
-    @provide
-    def provide_rule_engine(self) -> RuleEngineService:
-        return RuleEngineService()
+    # Domain Layer
+    rule_engine = provide(RuleEngineService)
 
-    # --- ACL WIRING START ---
-    @provide
-    def provide_scanner_gateway(self, controller: ScannerController) -> IScannerGateway:
-        """
-        Wraps the external ScannerController in our local ACL Adapter.
-        Returns it as the Interface required by the App Layer.
-        """
-        return ScannerAcl(controller=controller)
+    # ACL Wiring: Bind Adapter to Interface.
+    # Dishka automatically injects the external ScannerController into ScannerAcl.
+    scanner_gateway = provide(ScannerAcl, provides=IScannerGateway)
 
-    # --- ACL WIRING END ---
+    # Application Layer
+    check_use_case = provide(CheckProjectUseCase)
 
-    @provide
-    def provide_check_use_case(
-        self, gateway: IScannerGateway, rule_engine: RuleEngineService
-    ) -> CheckProjectUseCase:
-        """
-        Injects the Interface (Gateway), not the concrete Controller.
-        """
-        return CheckProjectUseCase(scanner_gateway=gateway, rule_engine=rule_engine)
+    # Driving Port
+    controller = provide(LinterController)
 
-    @provide
-    def provide_controller(
-        self, use_case: CheckProjectUseCase, config: ConfigVo
-    ) -> LinterController:
-        return LinterController(use_case=use_case, config=config)
-
-    @provide
-    def provide_container(self, controller: LinterController) -> LinterContainer:
-        return LinterContainer(controller=controller)
+    # Context Root
+    container = provide(LinterContainer)

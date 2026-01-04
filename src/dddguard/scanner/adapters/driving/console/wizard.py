@@ -1,4 +1,5 @@
-from typing import List, Any
+from typing import List, Any, Tuple, Optional
+from pathlib import Path
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
@@ -88,6 +89,8 @@ class ScanSettingsWizard:
             self._edit_layers_subscreen()
         elif action == "edit_contexts":
             self._edit_contexts_subscreen()
+        elif action == "edit_macros":
+            self._edit_macros_subscreen()
         elif action == "check_config":
             self._show_config_subscreen()
 
@@ -103,7 +106,6 @@ class ScanSettingsWizard:
 
         # Check if we are scanning the configured source root
         if self.config.project:
-            # Simple check, in production might need robust path comparison
             if (
                 opts.target_path.resolve()
                 == self.config.project.absolute_source_path.resolve()
@@ -144,7 +146,14 @@ class ScanSettingsWizard:
 
         l_count = len(opts.layers) if opts.layers else "ALL"
         c_count = len(opts.contexts) if opts.contexts else "ALL"
+        
         filter_table.add_row("Layers:", f"{l_count}")
+        
+        # Display Macros if active
+        if self.config.project.macro_contexts:
+            m_count = len(opts.macro_contexts) if opts.macro_contexts else "ALL"
+            filter_table.add_row("Macros:", f"{m_count}")
+
         filter_table.add_row("Contexts:", f"{c_count}")
 
         grid = Table(box=None, expand=True, padding=0, show_header=False)
@@ -168,6 +177,7 @@ class ScanSettingsWizard:
 
     def _build_main_menu_choices(self) -> List[Any]:
         opts = self.options
+        has_macros = bool(self.config.project.macro_contexts)
 
         def item(key, label, is_active):
             status = "[ON] " if is_active else "[OFF]"
@@ -177,11 +187,10 @@ class ScanSettingsWizard:
             val = "[ALL]" if is_all else f"[{count}]"
             return Choice(value=key, name=f"{label:<22} {val}")
         
-        # Helper for value display items
         def value_item(key, label, value):
             return Choice(value=key, name=f"{label:<22} [{value}]")
 
-        return [
+        choices = [
             Separator(" STRATEGY "),
             item("toggle_all", "Scan All Files", opts.scan_all),
             value_item("edit_depth", "Import Depth", opts.import_depth),
@@ -194,19 +203,37 @@ class ScanSettingsWizard:
                 opts.layers is None,
                 len(opts.layers or []),
             ),
+        ]
+
+        # Conditionally add Macro Filter
+        if has_macros:
+            choices.append(
+                filter_item(
+                    "edit_macros",
+                    "Filter Macros",
+                    opts.macro_contexts is None,
+                    len(opts.macro_contexts or []),
+                )
+            )
+
+        choices.append(
             filter_item(
                 "edit_contexts",
                 "Filter Contexts",
                 opts.contexts is None,
                 len(opts.contexts or []),
-            ),
+            )
+        )
             
+        choices.extend([
             Separator(),
             Choice(value="check_config", name="    Check Configuration"),
             Separator(),
             Choice(value="run", name=">>> EXECUTE SCAN <<<"),
             Choice(value="cancel", name="    Exit / Cancel"),
-        ]
+        ])
+        
+        return choices
 
     def _edit_depth_subscreen(self) -> None:
         """Popup to set integer depth."""
@@ -217,7 +244,6 @@ class ScanSettingsWizard:
         )
         if result and result.isdigit():
             val = int(result)
-            # Cap at reasonable limit to prevent explosions
             self.options.import_depth = min(val, 10)
 
     def _edit_layers_subscreen(self) -> None:
@@ -252,15 +278,106 @@ class ScanSettingsWizard:
             else:
                 self.options.layers = result
 
+    def _edit_macros_subscreen(self) -> None:
+        """
+        Logic for selecting Macro Contexts.
+        Selection here AUTOMATICALLY updates 'contexts' list.
+        """
+        # Map: "core_system" -> "core" (Folder)
+        macro_map = self.config.project.macro_contexts
+        
+        # We need a special key for "General" (contexts not in any macro folder)
+        GENERAL_KEY = "<General>"
+        
+        console.clear()
+        console.print(
+            Panel(
+                "[bold white]Filter by Macro Contexts[/]\n"
+                "[dim]Selecting a Macro will automatically select its Bounded Contexts.[/]",
+                subtitle="[dim]Space to Toggle • Enter to Confirm[/]",
+                border_style=SCANNER_THEME.primary_color,
+                expand=True,
+            )
+        )
+
+        current_selection = set(self.options.macro_contexts or [])
+        
+        # Build Choices
+        choices = []
+        # Add Defined Macros
+        for zone, folder in macro_map.items():
+            label = f"{zone} (/{folder})"
+            choices.append(Choice(value=zone, name=label, enabled=(zone in current_selection)))
+        
+        # Add General Option
+        choices.append(Choice(value=GENERAL_KEY, name="General / Root", enabled=(GENERAL_KEY in current_selection)))
+
+        result = ask_multiselect(
+            message=None, choices=choices, theme=SCANNER_THEME, instruction=""
+        )
+
+        if result is not None:
+            if not result:
+                # Empty selection -> Scan All
+                self.options.macro_contexts = None
+                self.options.contexts = None
+            else:
+                self.options.macro_contexts = result
+                # AUTO-POPULATE CONTEXTS
+                self._recalc_contexts_from_macros(result, GENERAL_KEY)
+
+    def _recalc_contexts_from_macros(self, selected_macros: List[str], general_key: str) -> None:
+        """
+        Helper: Looks at filesystem and populates self.options.contexts based on macro selection.
+        """
+        root = self.config.project.absolute_source_path
+        macro_map = self.config.project.macro_contexts # {zone: folder}
+        
+        # Invert map for easier lookup: folder -> zone
+        folder_to_zone = {v: k for k, v in macro_map.items()}
+        
+        found_contexts = []
+
+        if not root.exists():
+            return
+
+        # Define internal layers to skip (so we don't select 'domain' as a context)
+        # Standard symmetric DDD layers + common folders
+        ignored_layers = {
+            "domain", "app", "ports", "adapters", "composition", 
+            "infrastructure", "shared", "tests", "docs"
+        }
+
+        # Iterate all top-level directories in src/
+        for entry in root.iterdir():
+            if not entry.is_dir() or entry.name.startswith((".", "_")):
+                continue
+            
+            # Case A: Entry IS a macro folder (e.g. src/core)
+            if entry.name in folder_to_zone:
+                zone = folder_to_zone[entry.name]
+                if zone in selected_macros:
+                    # 1. Add the Macro Orchestrator itself
+                    found_contexts.append(entry.name)
+
+                    # 2. Add Sub-Contexts
+                    for sub in entry.iterdir():
+                        if sub.is_dir() and not sub.name.startswith((".", "_")):
+                            # Important: Filter out standard layers
+                            if sub.name.lower() not in ignored_layers:
+                                found_contexts.append(sub.name)
+            
+            # Case B: Entry is a Context in General space (e.g. src/shared)
+            else:
+                if general_key in selected_macros:
+                    found_contexts.append(entry.name)
+
+        self.options.contexts = found_contexts
+
     def _edit_contexts_subscreen(self) -> None:
         source_path = self.config.project.absolute_source_path
-        available_contexts = []
-        if source_path.exists():
-            available_contexts = [
-                d.name
-                for d in source_path.iterdir()
-                if d.is_dir() and not d.name.startswith(("_", "."))
-            ]
+        # Returns List[(ContextName, MacroZone|None)]
+        available_contexts = self._discover_all_contexts(source_path)
 
         console.clear()
         console.print(
@@ -281,10 +398,40 @@ class ScanSettingsWizard:
             return
 
         current_selection = set(self.options.contexts or [])
-        choices = [
-            Choice(value=ctx, name=ctx, enabled=(ctx in current_selection))
-            for ctx in available_contexts
-        ]
+        
+        # --- SORTING LOGIC ---
+        # 1. General Contexts (None) first
+        # 2. Then Macro Contexts sorted by Zone Name
+        # 3. Within Macro: Orchestrator first (name == folder), then alphabetically
+        def sort_key(item):
+            ctx_name, macro_zone = item
+            if macro_zone is None:
+                return (0, "", ctx_name) # Group 0: General
+            
+            # Check if this is the orchestrator (context name matches the physical folder associated with the zone)
+            # We don't have the physical map here easily, but we can assume if ctx_name == macro_folder_name
+            # Since we only have zone tag here, let's just push sub-modules after.
+            # Usually Orchestrator name (scanner) matches the folder.
+            
+            return (1, macro_zone, ctx_name)
+
+        available_contexts.sort(key=sort_key)
+
+        # Enhanced Display: [macro: name] context
+        choices = []
+        for ctx_name, macro_zone in available_contexts:
+            if macro_zone:
+                # Highlight if it's the orchestrator for that zone (heuristic: usually same name or 'shared')
+                # But here we just print them.
+                label = f"[macro: {macro_zone}] {ctx_name}"
+            else:
+                label = ctx_name
+
+            choices.append(Choice(
+                value=ctx_name, 
+                name=label, 
+                enabled=(ctx_name in current_selection)
+            ))
 
         result = ask_select(
             message=None,
@@ -298,9 +445,52 @@ class ScanSettingsWizard:
         if result is not None:
             self.options.contexts = result if result else None
 
+    def _discover_all_contexts(self, root: Path) -> List[Tuple[str, Optional[str]]]:
+        """
+        Recursively finds contexts.
+        Returns a list of tuples: (ContextName, MacroZoneName|None).
+        """
+        results = []
+        if not root.exists():
+            return []
+            
+        macro_map = self.config.project.macro_contexts # {zone: folder_name}
+        # Invert map for checks: folder -> zone
+        folder_to_zone = {v: k for k, v in macro_map.items()}
+
+        # Layers to ignore inside a Macro Context folder
+        ignored_layers = {
+            "domain", "app", "ports", "adapters", "composition", 
+            "infrastructure", "shared", "tests", "docs", "__pycache__"
+        }
+
+        for entry in root.iterdir():
+            if not entry.is_dir() or entry.name.startswith((".", "_")):
+                continue
+                
+            if entry.name in folder_to_zone:
+                # It is a Macro Root (e.g. 'scanner')
+                zone_name = folder_to_zone[entry.name]
+                
+                # 1. Add the Orchestrator (The Macro folder itself acts as a context)
+                results.append((entry.name, zone_name))
+
+                # 2. Scan for Sub-Contexts
+                for sub in entry.iterdir():
+                    if not sub.is_dir() or sub.name.startswith((".", "_")):
+                        continue
+                    
+                    # Filter out standard layers. 
+                    # Anything NOT a layer is considered a Sub-Context.
+                    if sub.name.lower() not in ignored_layers:
+                        results.append((sub.name, zone_name))
+            else:
+                # General context (root level)
+                results.append((entry.name, None))
+        
+        return results
+
     def _show_config_subscreen(self) -> None:
-        # Avoid circular import or duplication; basic rendering or a placeholder
-        # In a real app, render_config_info would be imported from shared adapters
         console.print(
             "[dim]Config check skipped to avoid circular imports in snippet.[/]"
         )

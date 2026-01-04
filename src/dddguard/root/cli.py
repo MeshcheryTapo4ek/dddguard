@@ -61,13 +61,18 @@ def main_callback(ctx: typer.Context) -> None:
 
 def _interactive_menu_loop() -> None:
     while True:
-        container = build_app_container()
         try:
+            container = build_app_container()
             _interactive_menu(container)
             break
         except ReloadAppSignal:
             console.print("[yellow]↻ Reloading Configuration...[/]", style="dim")
             continue
+        except Exception:
+            # Catch errors during container build or menu loop
+            console.print("\n[bold red]❌ Critical Application Error[/bold red]")
+            console.print_exception(show_locals=False)
+            break
 
 
 def _interactive_menu(container) -> None:
@@ -101,12 +106,11 @@ def _interactive_menu(container) -> None:
         # --- DYNAMIC HISTORY CHECK (In-Memory) ---
         last_scan = get_last_scan_options()
         if last_scan:
-            # We display a nice short summary of the last target
             target_name = last_scan.target_path.name
             choices.append(
                 Choice(
                     "REPEAT_SCAN", 
-                    f"0. Repeat Scan:      {target_name}/"
+                    f"0. Repeat Scan:       {target_name}/"
                 )
             )
             choices.append(Separator())
@@ -143,7 +147,6 @@ def _interactive_menu(container) -> None:
                 ]
             )
         else:
-            # Fallback menu when no config exists
             choices.extend(
                 [
                     Separator(" SETUP "),
@@ -220,33 +223,43 @@ def _interactive_menu(container) -> None:
 
         except KeyboardInterrupt:
             console.print("\n[yellow]Action cancelled.[/]")
-        except Exception as e:
-            console.print(f"\n[bold red]❌ Unexpected Error:[/bold red] {e}")
+        except Exception:
+            # --- IMPROVED ERROR CATCHING ---
+            console.print("\n[bold red]❌ Unexpected Error:[/bold red]")
+            # This prints the stack trace nicely using Rich
+            console.print_exception(show_locals=False) 
             console.print()
             console.input("[dim]Press Enter to return to menu...[/]")
 
 
 def main() -> None:
     """Application entry point for CLI command registration."""
-    container = build_app_container()
-
-    # Register Scanner Commands
-    scanner = container.get(ScannerContainer)
-    scanner.register_commands(app)
-
-    # Register Scaffolder Commands
-    scaffolder = container.get(ScaffolderContainer)
-    scaffolder.register_commands(app)
-
-    # Register Linter Commands
-    linter = container.get(LinterContainer)
-    linter.register_commands(app)
+    # We moved container build inside the interactive loop or individual commands
+    # to handle reloading gracefully.
     
-    # Register Visualizer Commands
-    visualizer = container.get(VisualizerContainer)
-    visualizer.register_commands(app)
+    # Register Scanner Commands
+    try:
+        container = build_app_container()
+        scanner = container.get(ScannerContainer)
+        scanner.register_commands(app)
 
-    app(obj={"container": container})
+        # Register Scaffolder Commands
+        scaffolder = container.get(ScaffolderContainer)
+        scaffolder.register_commands(app)
+
+        # Register Linter Commands
+        linter = container.get(LinterContainer)
+        linter.register_commands(app)
+        
+        # Register Visualizer Commands
+        visualizer = container.get(VisualizerContainer)
+        visualizer.register_commands(app)
+
+        app(obj={"container": container})
+        
+    except Exception:
+        console.print("[bold red]❌ Fatal Startup Error[/bold red]")
+        console.print_exception()
 
 
 if __name__ == "__main__":

@@ -22,4 +22,7 @@ class DiskFileSystemGateway(IFileSystemGateway):
                 f.write(file_vo.content)
 
         except Exception as e:
-            raise ScaffolderAppError(f"IO Error writing config to {file_vo.path}: {e}")
+            raise ScaffolderAppError(
+                message=f"IO Error writing config to {file_vo.path}: {e}",
+                original_error=e
+            ) from e

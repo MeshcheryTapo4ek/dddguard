@@ -12,13 +12,14 @@ from .services.optimization import (
     ContainerOptimizationService,
     FlowPackingService,
 )
-from .errors import VisualizerDomainError, LayoutCalculationError
+from .errors import LayoutCalculationError
 
 __all__ = [
     # Primitives
     "VisualElement",
     "LeafNode",
     "VisualContainer",
+    "VisualizationOptions",
     # Graph
     "DependencyGraph",
     "DependencyNode",
@@ -38,6 +39,5 @@ __all__ = [
     "ContainerOptimizationService",
     "FlowPackingService",
     # Errors
-    "VisualizerDomainError",
     "LayoutCalculationError",
 ]

@@ -1,26 +1,23 @@
-from dataclasses import dataclass, field
+from typing import Optional
+from dddguard.shared.helpers.generics import GenericAppError
 
 
-@dataclass
-class ScaffolderAppError(Exception):
-    """Base exception for Scaffolder App Layer."""
-
-    message: str
-
-    def __post_init__(self):
-        super().__init__(self.message)
-
-
-@dataclass
-class InitializationError(ScaffolderAppError):
-    """Raised when project initialization fails."""
-
-    project_name: str
-    reason: str
-    message: str = field(init=False)
-
-    def __post_init__(self):
-        self.message = (
-            f"Failed to initialize project '{self.project_name}': {self.reason}"
+class ScaffolderAppError(GenericAppError):
+    """
+    Base exception for Scaffolder App Layer.
+    """
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        super().__init__(
+            message=message,
+            context_name="Scaffolder",
+            original_error=original_error
         )
-        super().__post_init__()
+
+
+class InitializationError(ScaffolderAppError):
+    """
+    Raised when project initialization fails.
+    """
+    def __init__(self, project_name: str, reason: str, original_error: Optional[Exception] = None):
+        msg = f"Failed to initialize project '{project_name}': {reason}"
+        super().__init__(message=msg, original_error=original_error)

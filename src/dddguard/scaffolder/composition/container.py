@@ -18,44 +18,31 @@ class ScaffolderContainer:
     Facade for Scaffolder Context.
     Exposes the Controller via the CLI adapter.
     """
-
     controller: ScaffolderController
 
-    def register_commands(self, app: typer.Typer):
-        driving_adapter.register_commands(
-            app,
-            self.controller,
-        )
+    def register_commands(self, app: typer.Typer) -> None:
+        """
+        Delegates command registration to the driving adapter logic.
+        """
+        driving_adapter.register_commands(app, self.controller)
 
 
 class ScaffolderProvider(Provider):
+    """
+    DI Provider for the Scaffolder Context.
+    Wires file system access and configuration logic.
+    """
+    
     scope = Scope.APP
 
-    # --- Driven Adapters ---
-    @provide
-    def provide_fs_gateway(self) -> IFileSystemGateway:
-        return DiskFileSystemGateway()
+    # Driven Adapter: Bind Implementation to Interface
+    fs_gateway = provide(DiskFileSystemGateway, provides=IFileSystemGateway)
 
-    # --- Use Cases ---
-    @provide
-    def provide_create_config_use_case(
-        self, gateway: IFileSystemGateway
-    ) -> CreateConfigUseCase:
-        return CreateConfigUseCase(fs_gateway=gateway)
+    # Application Layer (Use Case)
+    create_config_use_case = provide(CreateConfigUseCase)
 
-    # --- Driving Ports (Controllers) ---
-    @provide
-    def provide_controller(
-        self, config_uc: CreateConfigUseCase
-    ) -> ScaffolderController:
-        return ScaffolderController(create_config_use_case=config_uc)
+    # Driving Port (Controller)
+    controller = provide(ScaffolderController)
 
-    # --- Container Facade ---
-    @provide
-    def provide_container(
-        self,
-        controller: ScaffolderController,
-    ) -> ScaffolderContainer:
-        return ScaffolderContainer(
-            controller=controller,
-        )
+    # Context Root
+    container = provide(ScaffolderContainer)

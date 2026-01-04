@@ -1,21 +1,22 @@
-from dataclasses import dataclass
+from typing import Optional
+from dddguard.shared.helpers.generics import GenericDomainError
 
 
-@dataclass
-class LinterDomainError(Exception):
-    """Base exception for Linter Domain Logic."""
+class LinterDomainError(GenericDomainError):
+    """
+    Base exception for Linter Domain Logic.
+    """
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        super().__init__(
+            message=message,
+            context_name="Linter",
+            original_error=original_error
+        )
 
-    message: str
 
-    def __post_init__(self):
-        super().__init__(self.message)
-
-
-@dataclass
 class RuleDefinitionError(LinterDomainError):
-    """Raised when the rule matrix structure is invalid."""
-
-    rule_id: str
-
-    def __post_init__(self):
-        super().__init__(f"Invalid rule definition detected for ID: {self.rule_id}")
+    """
+    Raised when the rule matrix structure is invalid.
+    """
+    def __init__(self, rule_id: str):
+        super().__init__(f"Invalid rule definition detected for ID: {rule_id}")

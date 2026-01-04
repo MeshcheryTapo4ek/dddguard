@@ -1,40 +1,35 @@
-from dataclasses import dataclass, field
+from typing import Optional
+from dddguard.shared.helpers.generics import GenericAppError
 
 
-@dataclass
-class LinterAppError(Exception):
-    """Base exception for Linter Application Layer."""
-
-    message: str
-
-    def __post_init__(self):
-        super().__init__(self.message)
-
-
-@dataclass
-class AnalysisExecutionError(LinterAppError):
-    """Raised when the analysis process fails unexpectedly."""
-
-    step: str
-    original_error: str
-
-    message: str = field(init=False)
-
-    def __post_init__(self):
-        self.message = (
-            f"Failed to execute analysis step '{self.step}': {self.original_error}"
+class LinterAppError(GenericAppError):
+    """
+    Base exception for Linter Application Layer.
+    """
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        super().__init__(
+            message=message,
+            context_name="Linter",
+            original_error=original_error
         )
-        Exception.__init__(self, self.message)
 
 
-@dataclass
-class ScannerAppError(Exception):
+class AnalysisExecutionError(LinterAppError):
     """
-    Base exception for Scanner App Layer.
-    Expected to be caught by the Presentation Layer (CLI/API).
+    Raised when the analysis process fails unexpectedly.
     """
+    def __init__(self, step: str, original_error: Exception):
+        msg = f"Failed to execute analysis step '{step}': {str(original_error)}"
+        super().__init__(message=msg, original_error=original_error)
 
-    message: str
 
-    def __post_init__(self):
-        super().__init__(self.message)
+class ScannerAppError(GenericAppError):
+    """
+    Base exception for Scanner App Layer (Used in Linter context as reference).
+    """
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        super().__init__(
+            message=message,
+            context_name="Scanner", # Note context name
+            original_error=original_error
+        )

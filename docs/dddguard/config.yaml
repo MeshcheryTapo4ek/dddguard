@@ -3,7 +3,12 @@ project:
   source_dir: "src/dddguard"
   tests_dir: "tests"
   docs_dir: "docs"
+  
+  macro_contexts:
+    scanner: "scanner"
 
+
+    
 scanner:
   # Directories to completely exclude from scanning
   exclude_dirs:
