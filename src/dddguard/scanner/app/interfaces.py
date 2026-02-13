@@ -1,37 +1,37 @@
-from typing import Protocol, Dict, Any, List
 from pathlib import Path
+from typing import Protocol
 
-from ..domain.value_objects import DetectionResultVo, ClassificationResultVo
-from dddguard.shared.domain import ComponentPassport
+from dddguard.shared.domain import CodeGraph, ScannerConfig
 
 
 class IDetectionGateway(Protocol):
     """
-    Interface for interacting with the Detection Bounded Context.
-    Returns Domain VOs, not Port Schemas.
+    ACL: Interface to the Detection Bounded Context (Physical Analysis).
     """
+
     def scan(
         self,
-        target_path: Path | None,
-        dirs_only: bool,
+        scanner_config: ScannerConfig,
+        target_path: Path,
         scan_all: bool,
-        import_depth: int,
-        focus_path: Path | None,
-        include_paths: List[Path] | None,
-    ) -> DetectionResultVo:
+    ) -> CodeGraph:
+        """
+        Triggers physical scanning: Walking -> AST Parsing -> Import Resolution.
+        Returns a LINKED CodeGraph (Nodes exist, imports resolved, but NO architecture info).
+        """
         ...
 
 
 class IClassificationGateway(Protocol):
     """
-    Interface for interacting with the Classification Bounded Context.
-    Returns Domain VOs, not Port Schemas.
+    ACL: Interface to the Classification Bounded Context (Architectural Analysis).
     """
-    def classify(self, raw_graph_nodes: Dict[str, Any]) -> ClassificationResultVo:
-        ...
 
-    def identify_component(self, file_path: Path) -> ComponentPassport:
+    def classify(self, graph: CodeGraph, source_dir: Path | None = None) -> CodeGraph:
         """
-        Identifies the architectural role of a single file/directory.
+        Takes a LINKED CodeGraph and mutates it into a CLASSIFIED CodeGraph.
+        Assigns 'ComponentPassport' to every node.
+
+        :param source_dir: Contextual root for calculating relative paths during classification.
         """
         ...

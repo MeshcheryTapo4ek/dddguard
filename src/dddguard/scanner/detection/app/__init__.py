@@ -1,9 +1,7 @@
 from .interfaces import IProjectReader
-from .use_cases.scan_project_use_case import ScanProjectUseCase
-from .errors import ProjectScanError
+from .scan_project_uc import ScanProjectUseCase
 
 __all__ = [
     "IProjectReader",
     "ScanProjectUseCase",
-    "ProjectScanError"
 ]

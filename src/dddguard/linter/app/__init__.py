@@ -1,11 +1,10 @@
-from .use_cases.check_project_use_case import CheckProjectUseCase
+from .check_project_uc import CheckProjectUseCase
+from .errors import AnalysisExecutionError, LinterAppError
 from .interfaces import IScannerGateway
-from .errors import LinterAppError, AnalysisExecutionError, ScannerAppError
 
 __all__ = [
+    "AnalysisExecutionError",
     "CheckProjectUseCase",
     "IScannerGateway",
     "LinterAppError",
-    "AnalysisExecutionError",
-    "ScannerAppError",
 ]

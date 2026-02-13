@@ -1,74 +1,58 @@
-from rich.console import Console
-from rich.panel import Panel
-from rich.align import Align
 from InquirerPy.base.control import Choice
 from InquirerPy.separator import Separator
 
-from dddguard.shared import ConfigVo
 from dddguard.shared.adapters.driving import (
     LINTER_THEME,
-    ask_select,
+    tui,  # Unified TUI
 )
-
-console = Console()
+from dddguard.shared.domain import ConfigVo
 
 
 class LintSettingsWizard:
     """
     Interactive UI Adapter for the Linter.
-    Allows the user to view rules or start the analysis.
     """
 
-    def __init__(self, config: ConfigVo):
-        self.config = config
+    def __init__(self, config: ConfigVo) -> None:
+        self.config: ConfigVo = config
 
     def run(self) -> bool | str:
-        """
-        Main menu loop.
-        Returns:
-            True: Run Lint
-            False: Cancel/Exit
-            str: "view_summary" or "view_matrix"
-        """
-        console.clear()
+        tui.set_theme(LINTER_THEME)
+        tui.clear()
         self._render_dashboard()
 
         choices = [
-            Choice(value=True, name="🚀 Run Linter Analysis"),
+            Choice(value=True, name="Run Linter Analysis"),
             Separator(),
-            Choice(value="view_summary", name="📖 View Rules Summary"),
-            Choice(value="view_matrix", name="🔢 View Rules Matrix"),
+            Choice(value="view_summary", name="View Rules Reference (all 13 rules)"),
+            Choice(value="view_matrix", name="View Access Matrix (computed from policy)"),
             Separator(),
-            Choice(value=False, name="❌ Exit"),
+            Choice(value=False, name="Exit"),
         ]
 
-        action = ask_select(
+        action: bool | str = tui.select(
             message=None,
             choices=choices,
-            theme=LINTER_THEME,
             instruction="(Use arrow keys to navigate)",
             default=True,
         )
 
         return action
 
-    def _render_dashboard(self):
-        """Renders the context header."""
-        color = LINTER_THEME.primary_color
-
-        # Determine display path
+    def _render_dashboard(self) -> None:
         try:
             source_path = self.config.project.absolute_source_path
-            path_str = f"./{source_path.relative_to(self.config.project.project_root)}"
+            project_root = self.config.project.project_root
+            if source_path and project_root:
+                path_str = f"./{source_path.relative_to(project_root)}"
+            else:
+                path_str = str(source_path) if source_path else "N/A"
         except ValueError:
             path_str = str(self.config.project.absolute_source_path)
 
-        panel = Panel(
-            Align.center(f"Target: [bold white]{path_str}[/]"),
-            title=f"[bold {color}]Linter Configuration[/]",
-            subtitle="[dim]Validate Architecture Rules[/]",
-            border_style=color,
-            padding=(1, 2),
-            expand=True,
+        tui.dashboard(
+            title="Linter Configuration",
+            subtitle="Validate Architecture Rules",
+            theme=LINTER_THEME,
+            data={"Target": f"[bold white]{path_str}[/]"},
         )
-        console.print(panel)

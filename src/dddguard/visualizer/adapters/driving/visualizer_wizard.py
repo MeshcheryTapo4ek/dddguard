@@ -1,31 +1,21 @@
-from typing import List, Any
-from rich.console import Console, Group
-from rich.panel import Panel
-from rich.text import Text
-from rich.align import Align
-from rich.table import Table
-from rich import box
+from typing import Any
 
 from InquirerPy.base.control import Choice
 from InquirerPy.separator import Separator
 
 from dddguard.shared.adapters.driving import (
     VISUALIZER_THEME,
-    ask_select,
-    ask_text,
-    ask_multiselect
+    tui,  # Unified TUI
 )
 
-from ...ports.driving import DrawOptionsDto
-
-console = Console()
+from ...ports.driving.visualizer_facade import DrawOptionsDto
 
 
 class VisualizerSettingsWizard:
     def __init__(self, config):
         self.config = config
         self.theme_color = VISUALIZER_THEME.primary_color
-        
+
         # State
         self.show_errors = True
         self.hide_root_arrows = True
@@ -34,18 +24,18 @@ class VisualizerSettingsWizard:
 
     def run(self) -> DrawOptionsDto | None:
         last_pointer = "run"
+        tui.set_theme(VISUALIZER_THEME)
 
         while True:
-            console.clear()
+            tui.clear()
             self._render_dashboard()
 
             choices = self._build_menu()
 
-            action = ask_select(
+            action = tui.select(
                 message=None,
                 choices=choices,
                 default=last_pointer,
-                theme=VISUALIZER_THEME,
                 instruction="",
             )
 
@@ -57,7 +47,7 @@ class VisualizerSettingsWizard:
 
             if action == "edit_output":
                 self._edit_output_filename()
-            
+
             elif action == "edit_filters":
                 self._edit_filters()
 
@@ -75,29 +65,32 @@ class VisualizerSettingsWizard:
         choices = [
             Choice(value="errors", name="Show Errors/Exceptions", enabled=self.show_errors),
             Separator(),
-            Choice(value="hide_root", name="Hide Wiring (Root -> *)", enabled=self.hide_root_arrows),
-            Choice(value="hide_shared", name="Hide Common (* -> Shared)", enabled=self.hide_shared_arrows),
+            Choice(
+                value="hide_root",
+                name="Hide Wiring (Root -> *)",
+                enabled=self.hide_root_arrows,
+            ),
+            Choice(
+                value="hide_shared",
+                name="Hide Common (* -> Shared)",
+                enabled=self.hide_shared_arrows,
+            ),
         ]
-        
-        console.clear()
-        console.print(Panel("[bold white]Graph Visibility Settings[/]", border_style=self.theme_color))
-        
-        selected = ask_multiselect(
-            message=None,
-            choices=choices,
-            theme=VISUALIZER_THEME
-        )
-        
+
+        tui.clear()
+        tui.console.print("[bold white]Graph Visibility Settings[/]")
+
+        selected = tui.multiselect(message=None, choices=choices)
+
         if selected is not None:
             self.show_errors = "errors" in selected
             self.hide_root_arrows = "hide_root" in selected
             self.hide_shared_arrows = "hide_shared" in selected
 
     def _edit_output_filename(self):
-        new_val = ask_text(
+        new_val = tui.text(
             message="Enter filename (.drawio)",
             default=self.output_file,
-            theme=VISUALIZER_THEME,
         )
         if new_val:
             if not new_val.endswith(".drawio"):
@@ -105,32 +98,18 @@ class VisualizerSettingsWizard:
             self.output_file = new_val
 
     def _render_dashboard(self):
-        color = self.theme_color
-        grid = Table.grid(padding=(0, 2))
-        grid.add_column(style="dim", justify="right", min_width=15)
-        grid.add_column(style="bold white")
-
-        grid.add_row("Output:", f"[{color}]{self.output_file}[/]")
-        grid.add_row("Errors:", "Visible" if self.show_errors else "[dim]Hidden[/]")
-        
-        # New Status Logic
-        root_st = "Hidden (Clean)" if self.hide_root_arrows else "[dim]Show All[/]"
-        grid.add_row("Wiring (Root):", root_st)
-        
-        shared_st = "Hidden (Clean)" if self.hide_shared_arrows else "[dim]Show All[/]"
-        grid.add_row("Shared Deps:", shared_st)
-
-        content = Group(Align.center(Text("ARCHITECTURAL MAPPER", style="bold " + color)), Text(" "), Align.center(grid))
-        panel = Panel(
-            content,
-            border_style=color,
-            padding=(1, 2),
-            box=box.ROUNDED,
-            expand=True,
+        tui.dashboard(
+            title="ARCHITECTURAL MAPPER",
+            theme=VISUALIZER_THEME,
+            data={
+                "Output": f"[{self.theme_color}]{self.output_file}[/]",
+                "Errors": "Visible" if self.show_errors else "[dim]Hidden[/]",
+                "Wiring (Root)": "Hidden (Clean)" if self.hide_root_arrows else "[dim]Show All[/]",
+                "Shared Deps": "Hidden (Clean)" if self.hide_shared_arrows else "[dim]Show All[/]",
+            },
         )
-        console.print(panel)
 
-    def _build_menu(self) -> List[Any]:
+    def _build_menu(self) -> list[Any]:
         return [
             Separator(" CONFIGURATION "),
             Choice(value="edit_filters", name="  🔍 Filters & Noise Reduction..."),

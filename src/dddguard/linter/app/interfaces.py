@@ -1,13 +1,12 @@
-from typing import Protocol, List
 from pathlib import Path
+from typing import Protocol
 
-from ..domain import ScannedNodeVo
+from dddguard.shared.domain import CodeGraph
 
 
 class IScannerGateway(Protocol):
     """
     Application Port: Abstract interface for retrieving project structure.
-    Returns Linter-native Value Objects (ScannedNodeVo).
     """
 
-    def get_project_nodes(self, root_path: Path) -> List[ScannedNodeVo]: ...
+    def get_project_graph(self, root_path: Path) -> CodeGraph: ...

@@ -10,7 +10,7 @@ drawings:
 transition: slide-left
 mdc: true
 css: unocss
-# Титульный слайд (Hero)
+# Title slide (Hero)
 layout: hero
 ---
 

@@ -1,13 +1,13 @@
-1. The Core (Внутренний круг)
+1. The Core (Inner Circle)
 🟦 Domain (Business Logic)
 
 Role: Entities, VO, Aggregates.
 
 Hex: #3B82F6 (Blue-500)
 
-Fill: #3B82F6 (Solid) или #1E3A8A (Darker fill)
+Fill: #3B82F6 (Solid) or #1E3A8A (Darker fill)
 
-Meaning: Холодный разум, чистая логика, стабильность.
+Meaning: Cold mind, pure logic, stability.
 
 🟪 Application (Orchestration)
 
@@ -15,12 +15,12 @@ Role: UseCases, Workflows, Handlers.
 
 Hex: #A855F7 (Purple-500)
 
-Fill: #A855F7 (Solid) или #581C87 (Darker fill)
+Fill: #A855F7 (Solid) or #581C87 (Darker fill)
 
-Meaning: Магия соединения, управление процессами.
+Meaning: Connection magic, process management.
 
-2. The Shell (Внешний круг)
-Чтобы на схемах было четко видно направление данных (слева-направо или сверху-вниз), разделим адаптеры:
+2. The Shell (Outer Circle)
+To make data flow direction clearly visible on diagrams (left-to-right or top-to-bottom), we split adapters:
 
 🟧 Driving Side (Input / Entry)
 
@@ -28,7 +28,7 @@ Role: Controllers, CLI Commands, Event Consumers.
 
 Hex: #F97316 (Orange-500)
 
-Meaning: Энергия, входящий импульс, "Горячая" зона.
+Meaning: Energy, incoming impulse, "Hot" zone.
 
 🟩 Driven Side (Output / Infra)
 
@@ -36,16 +36,16 @@ Role: Repositories, API Clients, Gateways.
 
 Hex: #22C55E (Green-500)
 
-Meaning: Результат, сохранение, "Безопасная" зона.
+Meaning: Result, persistence, "Safe" zone.
 
-3. The Glue (Связи)
+3. The Glue (Connections)
 ⬜ DTO (Data Transfer Objects)
 
 Role: Request/Response models.
 
 Hex: #94A3B8 (Slate-400)
 
-Style: Серый фон, возможно скругленные углы, так как это пассивные данные.
+Style: Gray background, possibly rounded corners, as these are passive data.
 
 🟨 Ports (Interfaces)
 
@@ -53,7 +53,7 @@ Role: Abstract Interfaces / Protocols.
 
 Hex: #EAB308 (Yellow-500)
 
-Style: Часто изображаются как "Socket" (полукруг) или прямоугольник с пунктирной обводкой (Dashed Border), так как это контракт, а не реализация.
+Style: Often depicted as a "Socket" (semicircle) or rectangle with dashed border, as this is a contract, not an implementation.
 
 🟥 Composition Root
 
@@ -61,4 +61,4 @@ Role: DI Container, Main.
 
 Hex: #F43F5E (Rose-500)
 
-Meaning: Сборка, системный уровень.
+Meaning: Assembly, system level.

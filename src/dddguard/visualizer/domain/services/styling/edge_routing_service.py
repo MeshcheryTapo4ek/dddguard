@@ -1,94 +1,91 @@
 from dataclasses import dataclass
-from typing import Tuple
+
+OVERLAP_THRESHOLD = 0.5
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class EdgeRoutingService:
     """
-    Domain Service: computes anchor style for edges (exit/entry points).
-    Enforces "Waterfall" routing for layered architecture:
-    - Downward dependencies always Exit Bottom -> Enter Top.
-    - Side-by-side dependencies use Left/Right.
+    Domain Service: computes anchor style for edges.
+    Refactored to support grouped routing (Distribution).
     """
 
-    # How much vertical overlap is allowed before we consider them "side-by-side"
-    # 0.5 means if they overlap by 50% height, treat as horizontal row.
-    overlap_threshold: float = 0.5
+    @staticmethod
+    def resolve_direction(
+        src: tuple[float, float, float, float],
+        tgt: tuple[float, float, float, float],
+    ) -> str:
+        """
+        Pure geometry check: Where is Target relative to Source?
+        Returns: 'DOWN', 'UP', 'SIDE_LEFT', 'SIDE_RIGHT'
+        """
+        sx, sy, sw, sh = src
+        tx, ty, tw, th = tgt
 
-    def anchor_style(
-        self,
-        src: Tuple[float, float, float, float],
-        tgt: Tuple[float, float, float, float],
+        src_bottom = sy + sh
+        src_top = sy
+        tgt_top = ty
+        tgt_bottom = ty + th
+
+        # 1. Downward (Waterfall)
+        if tgt_top >= (src_bottom - (sh * (1 - OVERLAP_THRESHOLD))):
+            return "DOWN"
+
+        # 2. Upward (Reverse Waterfall)
+        if tgt_bottom <= (src_top + (sh * (1 - OVERLAP_THRESHOLD))):
+            return "UP"
+
+        # 3. Side-by-Side
+        sc_x = sx + sw / 2.0
+        tc_x = tx + tw / 2.0
+
+        return "SIDE_RIGHT" if tc_x > sc_x else "SIDE_LEFT"
+
+    @staticmethod
+    def calculate_anchor(
+        direction: str,
         out_idx: int,
         out_total: int,
         in_idx: int,
         in_total: int,
     ) -> str:
         """
-        Returns a style string with exitX/exitY/entryX/entryY for mxGraph edges.
+        Generates the Draw.io connection points string based on pre-calculated groups.
         """
-        # Unpack geometries: x, y, width, height
-        sx, sy, sw, sh = src
-        tx, ty, tw, th = tgt
 
-        # Calculate boundaries
-        src_top = sy
-        src_bottom = sy + sh
-        tgt_top = ty
-        tgt_bottom = ty + th
-
-        # --- Determine Relative Position ---
-
-        # 1. Check for Downward Flow (Standard Layer Dependency)
-        # If the Target's top is clearly below the Source's "center-ish"
-        # We use a slight buffer so slight misalignments don't break logic
-        if tgt_top >= (src_bottom - (sh * (1 - self.overlap_threshold))):
-            direction = "DOWN"
-
-        # 2. Check for Upward Flow (Callbacks, or Mistakes)
-        elif tgt_bottom <= (src_top + (sh * (1 - self.overlap_threshold))):
-            direction = "UP"
-
-        # 3. Otherwise, they are effectively on the same horizontal row (Side-by-Side)
-        else:
-            direction = "SIDE"
-
-        # --- Helper for distribution ---
-        def rel_pos_zero_based(index_zero: int, total: int) -> float:
-            if total <= 1:
+        def rel_pos(index_zero: int, total: int) -> float:
+            # Distribute evenly: 1 item -> 0.5; 2 items -> 0.33, 0.66
+            if total <= 0:
                 return 0.5
-            # Distribute evenly between 0 and 1
             return float(index_zero + 1) / float(total + 1)
 
-        out_pos = rel_pos_zero_based(out_idx, out_total)
-        # For incoming, handle 1-based index if passed that way, or clamp
-        in_zero_based = max(in_idx - 1, 0)
-        in_pos = rel_pos_zero_based(in_zero_based, in_total)
-
-        parts = []
+        out_pos = rel_pos(out_idx, out_total)
+        in_pos = rel_pos(in_idx, in_total)
 
         if direction == "DOWN":
-            # Waterfall: Exit Bottom, Enter Top
-            parts.append(f"exitX={out_pos:.2f};exitY=1;exitDx=0;exitDy=0;")
-            parts.append(f"entryX={in_pos:.2f};entryY=0;entryDx=0;entryDy=0;")
+            # Exit Bottom -> Enter Top
+            return (
+                f"exitX={out_pos:.2f};exitY=1;exitDx=0;exitDy=0;"
+                f"entryX={in_pos:.2f};entryY=0;entryDx=0;entryDy=0;"
+            )
 
-        elif direction == "UP":
-            # Reverse Waterfall: Exit Top, Enter Bottom
-            parts.append(f"exitX={out_pos:.2f};exitY=0;exitDx=0;exitDy=0;")
-            parts.append(f"entryX={in_pos:.2f};entryY=1;entryDx=0;entryDy=0;")
+        if direction == "UP":
+            # Exit Top -> Enter Bottom
+            return (
+                f"exitX={out_pos:.2f};exitY=0;exitDx=0;exitDy=0;"
+                f"entryX={in_pos:.2f};entryY=1;entryDx=0;entryDy=0;"
+            )
 
-        else:  # SIDE
-            # Determine Left or Right based on center X
-            sc_x = sx + sw / 2.0
-            tc_x = tx + tw / 2.0
+        if direction == "SIDE_RIGHT":
+            # Exit Right -> Enter Left
+            return (
+                f"exitX=1;exitY={out_pos:.2f};exitDx=0;exitDy=0;"
+                f"entryX=0;entryY={in_pos:.2f};entryDx=0;entryDy=0;"
+            )
 
-            if tc_x > sc_x:
-                # Target is to the Right -> Exit Right, Enter Left
-                parts.append(f"exitX=1;exitY={out_pos:.2f};exitDx=0;exitDy=0;")
-                parts.append(f"entryX=0;entryY={in_pos:.2f};entryDx=0;entryDy=0;")
-            else:
-                # Target is to the Left -> Exit Left, Enter Right
-                parts.append(f"exitX=0;exitY={out_pos:.2f};exitDx=0;exitDy=0;")
-                parts.append(f"entryX=1;entryY={in_pos:.2f};entryDx=0;entryDy=0;")
-
-        return "".join(parts)
+        # SIDE_LEFT
+        # Exit Left -> Enter Right
+        return (
+            f"exitX=0;exitY={out_pos:.2f};exitDx=0;exitDy=0;"
+            f"entryX=1;entryY={in_pos:.2f};entryDx=0;entryDy=0;"
+        )

@@ -38,13 +38,6 @@ Command: dddguard draw
 
 The visualizer parses your actual code structure and generates an XML file compatible with Draw.io (diagrams.net). It maps relationships between Contexts and Layers based on real imports. When using `dddguard drawdir` to visualize a specific directory, the generated diagram will include comprehensive information in its legend, providing detailed insights into the visualized architecture.
 
-🧩 Create
-Command: dddguard create
-
-Scaffold new Bounded Contexts in seconds. Use the interactive wizard to generate production-ready boilerplate with:
-- Correct layers (domain, app, adapters, ports).
-- Dependency Injection containers.
-
 📡 Scan
 Command: dddguard scan
 
@@ -75,10 +68,6 @@ src/
 │   │   ├── driving/      # - Adapters that drive the application (e.g., Controllers)
 │   │   └── driven/       # - Adapters driven by the application (e.g., Repositories)
 │   │
-│   ├── dto/              # Data Transfer Objects: Simple, logic-less data carriers
-│   │   ├── driving/      # - Incoming data structures (Requests)
-│   │   └── driven/       # - Outgoing data structures (Responses, Events)
-│   │
 │   ├── ports/            # Technology-specific infrastructure code
 │   │   ├── driving/      # - Entry points for incoming signals (web server, CLI app)
 │   │   └── driven/       # - Egress points for outgoing signals (DB client, HTTP client)
@@ -103,7 +92,6 @@ src/
     -   **`domain/`**: The heart of the context's business logic. It is completely isolated and pure.
     -   **`app/`**: Orchestrates the domain logic to perform specific tasks, defining the application's capabilities.
     -   **`adapters/`**: Translate between the outside world and the application layer, implementing interfaces defined in `app/` or triggering `app/` logic.
-    -   **`dto/`**: Define the data contracts for requests and responses, ensuring clean boundaries.
     -   **`ports/`**: Contain the raw, technology-specific code that connects to infrastructure.
     -   **`composition.py`**: The context's local "glue" that wires together its internal components.
 

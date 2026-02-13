@@ -1,8 +1,6 @@
-from typing import Optional
 from .scan_options import ScanOptions
 
-
-_LAST_SCAN_OPTIONS: Optional[ScanOptions] = None
+_LAST_SCAN_OPTIONS: ScanOptions | None = None
 
 
 def set_last_scan_options(options: ScanOptions) -> None:
@@ -13,7 +11,7 @@ def set_last_scan_options(options: ScanOptions) -> None:
     _LAST_SCAN_OPTIONS = options
 
 
-def get_last_scan_options() -> Optional[ScanOptions]:
+def get_last_scan_options() -> ScanOptions | None:
     """
     Retrieves the last scan options from memory.
     Returns None if no scan has been performed in this session.

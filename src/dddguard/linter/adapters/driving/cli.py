@@ -1,102 +1,111 @@
-import typer
 from pathlib import Path
 
-from rich.console import Console
+import typer
 from rich import box
 from rich.table import Table
-from rich.panel import Panel
-from rich.align import Align
 
-# --- UI IMPORTS (Fixed Absolute Imports) ---
-from dddguard.shared import (
-    ask_path,
-    print_no_config_warning,
+# --- UI IMPORTS ---
+from dddguard.shared.adapters.driving import (
     LINTER_THEME,
-    safe_execution,
-    get_linter_help_renderable,
+    tui,  # Unified TUI
 )
+from dddguard.shared.assets.asset_help import get_linter_help_renderable
 
-from ...ports.driving import LinterController, LinterResponseSchema
+from ...ports.driving import LinterFacade, LinterResponseSchema, RulesMatrixSchema
 
 # --- LOCAL ADAPTERS (Wizards) ---
 from .lint_wizard import LintSettingsWizard
 from .rules_viewer import RulesViewer
 
-console = Console()
 
-
-def register_commands(app: typer.Typer, controller: LinterController):
+def register_commands(app: typer.Typer, facade: LinterFacade) -> None:
     """
     Registers Linter commands.
-    Injected dependency is the LinterController (Port).
     """
 
     @app.command(name="lintdir")
-    def lintdir():
-        """
-        🛡️ Lint a SPECIFIC directory.
-        """
-        run_lint_directory_flow(controller)
+    def lintdir() -> None:
+        """Lint a SPECIFIC directory."""
+        run_lint_directory_flow(facade)
 
     @app.command(name="lint")
-    def lint():
-        """
-        🛡️ Lint project architecture.
-        """
-        run_lint_project_flow(controller)
+    def lint(
+        auto: bool = typer.Option(
+            False,
+            "--auto",
+            "-a",
+            help="Run automatically without interactive wizard (for CI/CD)",
+        ),
+    ) -> None:
+        """Lint project architecture."""
+        run_lint_project_flow(facade, auto=auto)
 
 
-# --- PUBLIC FLOWS (Used by Root CLI too) ---
+# --- PUBLIC FLOWS ---
 
 
-def run_lint_directory_flow(controller: LinterController):
-    target = ask_path(
-        message="Select directory to lint",
-        default=".",
-        must_exist=True,
-        theme=LINTER_THEME,
-    )
+def run_lint_directory_flow(facade: LinterFacade) -> None:
+    tui.set_theme(LINTER_THEME)
+    target: Path | None = tui.path(message="Select directory to lint")
     if not target:
         return
 
-    _run_lint_logic(controller, target)
+    _run_lint_logic(facade, target)
 
 
-def run_lint_project_flow(controller: LinterController):
-    config = controller.config
-    if not config.project.has_config_file:
-        print_no_config_warning()
-        target = config.project.absolute_source_path
+def run_lint_project_flow(facade: LinterFacade, auto: bool = False) -> None:
+    tui.set_theme(LINTER_THEME)
+    config = facade.config
+
+    if config.project.config_file_path is None:
+        tui.warning("Configuration Missing", "Using default source path.")
+
+    target = config.project.absolute_source_path
+
+    if auto:
+        # Non-interactive mode: run directly without wizard
+        _run_lint_direct(facade, target)
     else:
-        target = config.project.absolute_source_path
-
-    _run_lint_logic(controller, target)
+        _run_lint_logic(facade, target)
 
 
-def _run_lint_logic(controller: LinterController, path: Path):
+def _run_lint_direct(facade: LinterFacade, path: Path) -> None:
     """
-    Launch Wizard then Execute via Port.
+    Non-interactive linting for CI/CD.
+    Runs directly without wizard.
     """
-    wizard = LintSettingsWizard(controller.config)
+    # Execute Scan via Port
+    with tui.spinner("Checking architecture..."):
+        response: LinterResponseSchema = facade.lint_project(path)
+
+    # Render Report (Adapter Responsibility) without pause
+    _print_report(response, auto_mode=True)
+
+    # Exit with error code if violations found
+    if not response.success:
+        raise typer.Exit(1)
+
+
+def _run_lint_logic(facade: LinterFacade, path: Path) -> None:
+    wizard = LintSettingsWizard(facade.config)
 
     # Wizard Loop
     while True:
-        result = wizard.run()
+        result: bool | str = wizard.run()
 
         if result is False:
             return
 
         if result == "view_summary":
-            console.clear()
-            console.print(get_linter_help_renderable())
-            console.print("\n[dim]Press [bold white]Enter[/] to return...[/]")
-            console.input()
+            tui.clear()
+            tui.console.print(get_linter_help_renderable())
+            tui.pause()
             continue
 
         if result == "view_matrix":
             # Adapter asks Port for data to visualize
-            rules_data = controller.get_rules_matrix()
-            viewer = RulesViewer(rules_data)
+            rules_matrix: RulesMatrixSchema = facade.get_rules_matrix()
+            viewer = RulesViewer(rules_matrix)
             viewer.render()
             continue
 
@@ -104,56 +113,37 @@ def _run_lint_logic(controller: LinterController, path: Path):
             break
 
     # Execute Scan via Port
-    with safe_execution(status_msg="Checking architecture...", spinner="dots"):
-        response: LinterResponseSchema = controller.lint_project(path)
+    with tui.spinner("Checking architecture..."):
+        response: LinterResponseSchema = facade.lint_project(path)
 
     # Render Report (Adapter Responsibility)
     _print_report(response)
 
 
-def _print_report(response_dto: LinterResponseSchema):
-    console.print()
-
+def _print_report(response_dto: LinterResponseSchema, auto_mode: bool = False) -> None:
     if response_dto.success:
         # --- SUCCESS STATE ---
-        grid = Table.grid(padding=(0, 2))
-        grid.add_column(style="dim", justify="right")
-        grid.add_column(style="bold white")
-
-        grid.add_row("Files Scanned:", f"{response_dto.total_scanned}")
-        grid.add_row("Violations:", "[green]0[/]")
-        grid.add_row("Status:", "[bold green]PASSED[/]")
-
-        panel = Panel(
-            Align.center(grid),
-            title="[bold green]🛡️ Architecture Clean[/]",
-            border_style="green",
-            box=box.ROUNDED,
-            padding=(1, 2),
-            expand=False,
+        tui.success(
+            "Architecture Clean",
+            {
+                "Files Scanned": str(response_dto.total_scanned),
+                "Violations": "[green]0[/]",
+                "Status": "[bold green]PASSED[/]",
+            },
         )
-        console.print(panel)
-        console.print()
+        if not auto_mode:
+            tui.pause()
         return
 
     # --- FAILURE STATE ---
-    summary_grid = Table.grid(padding=(0, 2))
-    summary_grid.add_column(style="dim", justify="right")
-    summary_grid.add_column(style="bold white")
-
-    summary_grid.add_row("Files Scanned:", f"{response_dto.total_scanned}")
-    summary_grid.add_row("Violations:", f"[red]{len(response_dto.violations)}[/]")
-    summary_grid.add_row("Status:", "[bold red]FAILED[/]")
-
-    summary_panel = Panel(
-        Align.center(summary_grid),
-        title="[bold red]❌ Architectural Violations Found[/]",
-        border_style="red",
-        box=box.ROUNDED,
-        expand=False,
+    tui.error(
+        "Architectural Violations Found",
+        {
+            "Files Scanned": str(response_dto.total_scanned),
+            "Violations": f"[red]{len(response_dto.violations)}[/]",
+            "Status": "[bold red]FAILED[/]",
+        },
     )
-    console.print(summary_panel)
-    console.print()
 
     # Detailed Table
     table = Table(
@@ -167,12 +157,13 @@ def _print_report(response_dto: LinterResponseSchema):
     table.add_column("Violation Details")
 
     for v in response_dto.violations:
-        loc = f"[bold white]{v.source}[/] [red]→[/] [dim white]{v.target}[/]"
+        loc = f"[bold white]{v.source}[/] [red]->[/] [dim white]{v.target}[/]"
         msg = f"{v.message}\nLoc: {loc}"
 
-        table.add_row(
-            v.rule_id, v.target_context if v.target_context else "internal", msg
-        )
+        table.add_row(v.rule_name, v.target_context or "internal", msg)
 
-    console.print(table)
-    console.print()
+    tui.console.print(table)
+    tui.console.print()
+
+    if not auto_mode:
+        tui.pause()

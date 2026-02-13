@@ -8,8 +8,8 @@ layout: default
       The Logical View
     </h1>
     <p class="text-gray-400 text-lg leading-relaxed">
-      Мое видение DDD выделяет следующую иерархию.<br>
-      Это <b>граф зависимостей</b>, который мы будем жестко контролировать.
+      My DDD vision highlights the following hierarchy.<br>
+      This is a <b>dependency graph</b> that we will strictly control.
     </p>
 </div>
 

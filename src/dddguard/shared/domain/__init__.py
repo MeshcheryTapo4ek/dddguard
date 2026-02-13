@@ -1,59 +1,79 @@
-from .value_objects.architecture_enums import (
-    ScopeEnum,
-    LayerEnum,
-    DirectionEnum,
-    LAYER_WEIGHTS,
-    DomainType,
-    AppType,
-    PortType,
+from .access_policy import (
+    COMPOSITION_LAYERS,
+    CROSS_CONTEXT_INBOUND_ALLOWED,
+    CROSS_CONTEXT_OUTBOUND_ALLOWED,
+    FRACTAL_DOWNSTREAM_ALLOWED,
+    FRACTAL_DOWNSTREAM_FORBIDDEN,
+    FRACTAL_UPSTREAM_ALLOWED,
+    FRACTAL_UPSTREAM_FORBIDDEN,
+    INTERNAL_ACCESS_MATRIX,
+    AccessRule,
+    InternalAccessMatrix,
+    LayerDirectionKey,
+    RuleName,
+)
+from .architecture_enums import (
     AdapterType,
-    CompositionType,
+    AppType,
     ArchetypeType,
     ComponentType,
+    CompositionType,
+    DirectionEnum,
+    DomainType,
+    LayerEnum,
     MatchMethod,
+    PortType,
+    ScopeEnum,
 )
-from .value_objects.registry import (
-    DDD_SCOPE_REGISTRY,
-    DDD_LAYER_REGISTRY,
+from .code_graph_ent import CodeGraph, CodeNode, ComponentPassport, NodeStatus
+from .config_vo import ConfigVo, ProjectConfig, ScannerConfig
+from .registry import (
     DDD_DIRECTION_REGISTRY,
-    DDD_STRUCTURAL_REGISTRY,
+    DDD_LAYER_REGISTRY,
     DDD_NAMING_REGISTRY,
-    ComponentPassport,
-)
-from .value_objects.config_vo import ConfigVo, ProjectConfig, ScannerConfig
-from .policies.access_policy import (
-    INTERNAL_ACCESS_MATRIX,
-    PUBLIC_LAYERS,
-    OUTBOUND_LAYERS,
+    DDD_SCOPE_REGISTRY,
+    DDD_STRUCTURAL_REGISTRY,
 )
 
 __all__ = [
-    # Enums
-    "ScopeEnum",
-    "LayerEnum",
-    "DirectionEnum",
-    "LAYER_WEIGHTS",
-    "DomainType",
-    "AppType",
-    "PortType",
-    "AdapterType",
-    "CompositionType",
-    "ArchetypeType",
-    "ComponentType",
-    "MatchMethod",
-    # Registries
-    "DDD_SCOPE_REGISTRY",
-    "DDD_LAYER_REGISTRY",
+    "COMPOSITION_LAYERS",
+    "CROSS_CONTEXT_INBOUND_ALLOWED",
+    "CROSS_CONTEXT_OUTBOUND_ALLOWED",
     "DDD_DIRECTION_REGISTRY",
-    "DDD_STRUCTURAL_REGISTRY",
+    # Registry
+    "DDD_LAYER_REGISTRY",
     "DDD_NAMING_REGISTRY",
+    "DDD_SCOPE_REGISTRY",
+    "DDD_STRUCTURAL_REGISTRY",
+    "FRACTAL_DOWNSTREAM_ALLOWED",
+    "FRACTAL_DOWNSTREAM_FORBIDDEN",
+    "FRACTAL_UPSTREAM_ALLOWED",
+    "FRACTAL_UPSTREAM_FORBIDDEN",
+    "INTERNAL_ACCESS_MATRIX",
+    # Access Policy
+    "AccessRule",
+    "AdapterType",
+    "AppType",
+    "ArchetypeType",
+    "CodeGraph",
+    "CodeNode",
+    # Entities
     "ComponentPassport",
+    "ComponentType",
+    "CompositionType",
     # Config VOs
     "ConfigVo",
+    "DirectionEnum",
+    "DomainType",
+    "InternalAccessMatrix",
+    "LayerDirectionKey",
+    "LayerEnum",
+    "MatchMethod",
+    "NodeStatus",
+    "PortType",
     "ProjectConfig",
+    "RuleName",
     "ScannerConfig",
-    # Rules
-    "INTERNAL_ACCESS_MATRIX",
-    "PUBLIC_LAYERS",
-    "OUTBOUND_LAYERS",
+    # Enums
+    "ScopeEnum",
 ]

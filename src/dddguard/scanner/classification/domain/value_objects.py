@@ -1,45 +1,34 @@
-from dataclasses import dataclass, field
-from functools import cached_property
-from typing import List, Dict
+from dataclasses import dataclass
 
 from dddguard.shared.domain import (
-    ComponentPassport,
-    ArchetypeType
+    DirectionEnum,
+    LayerEnum,
+    ScopeEnum,
 )
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
-class EnrichedNodeVo:
+class ContextBoundaryVo:
     """
-    A Graph Node enriched with architectural metadata.
+    Result of Stage 0: Context Boundary Detection.
+    Internal to Classification Pipeline.
     """
-    module_path: str
-    passport: ComponentPassport
-    imports: List[str] = field(default_factory=list)
 
-    @property
-    def is_architecturally_valid(self) -> bool:
-        return self.passport.component_type != ArchetypeType.UNKNOWN
-
-
-@dataclass(frozen=True, kw_only=True)
-class ClassificationStatsVo:
-    """
-    Metrics regarding the identification process.
-    Uses cached_property for lazy, once-only calculation.
-    """
-    total_nodes: int
-    classified_nodes: int
-    unknown_nodes: int
-    
-    @cached_property
-    def coverage_percent(self) -> float:
-        if self.total_nodes == 0:
-            return 0.0
-        return round((self.classified_nodes / self.total_nodes) * 100, 2)
+    scope: ScopeEnum
+    macro_path: str | None
+    context_name: str | None
+    effective_parts: tuple[str, ...]
+    detected_layer_token: LayerEnum
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
-class EnrichedGraph:
-    nodes: Dict[str, EnrichedNodeVo] = field(default_factory=dict)
-    stats: ClassificationStatsVo
+class IdentificationCoordinatesVo:
+    """
+    Result of Stage 1: Coordinate Definition.
+    Internal to Classification Pipeline.
+    """
+
+    scope: ScopeEnum
+    layer: LayerEnum
+    direction: DirectionEnum
+    searchable_tokens: list[str]

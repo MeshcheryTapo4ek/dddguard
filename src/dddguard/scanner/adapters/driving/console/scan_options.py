@@ -1,29 +1,31 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 
 @dataclass
 class ScanOptions:
     """
     Mutable configuration state for the Scan Wizard.
-    Used strictly within the Console Adapter to accumulate user choices
-    before calling the Port.
+    Acts as a DTO between the Wizard (TUI) and the Facade.
     """
 
     target_path: Path
 
-    # Flags
-    dirs_only: bool = False
+    # Execution Flags
     scan_all: bool = False
 
+    # Presentation Flags (Handled by CLI adapter, not Domain)
+    file_tree_only: bool = False  # If True, suppresses file content in JSON output
+
+    # Scope Toggles
+    include_assets: bool = True
+
     # Filters
-    macro_contexts: Optional[List[str]] = None 
-    
-    contexts: Optional[List[str]] = None
-    layers: Optional[List[str]] = None  # None means ALL layers
-    
-    # Advanced
+    # If None, implies "All Allowed"
+    macro_contexts: list[str] | None = None
+    contexts: list[str] | None = None
+    layers: list[str] | None = None
+
     import_depth: int = 0
 
     # Output

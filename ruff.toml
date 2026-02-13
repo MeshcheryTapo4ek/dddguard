@@ -1,0 +1,92 @@
+# Ruff configuration for DDDGuard project
+# See: https://docs.astral.sh/ruff/
+
+target-version = "py310"
+line-length = 100
+
+[lint]
+# Select rule categories to enforce
+select = [
+    "F",      # Pyflakes (errors, undefined names)
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "I",      # isort (import sorting)
+    "N",      # pep8-naming
+    "UP",     # pyupgrade (modern Python syntax)
+    "B",      # flake8-bugbear (likely bugs)
+    "SIM",    # flake8-simplify
+    "RET",    # flake8-return
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib
+    "PL",     # Pylint
+    "RUF",    # Ruff-specific rules
+]
+
+# Ignore specific rules
+ignore = [
+    # Documentation
+    "D",      # pydocstyle (we handle docs separately)
+    
+    # Type annotations
+    "ANN",    # flake8-annotations (we use type hints selectively)
+    
+    # Style preferences
+    "COM",    # flake8-commas (trailing commas)
+    "EM",     # flake8-errmsg (f-strings in exceptions are fine)
+    "TRY003", # raise-vanilla-args (long messages are fine)
+    "RUF001", # ambiguous-unicode-character (❯ arrow is intentional UI choice)
+    
+    # Developer workflow
+    "T20",    # flake8-print (print is OK in some adapters)
+    "FIX",    # flake8-fixme (TODO comments are tracked elsewhere)
+    "TD",     # flake8-todos
+    "ERA",    # eradicate (commented code can be useful)
+    
+    # Too strict for our architecture
+    "E501",   # line-too-long (100 is max, but some lines are OK)
+    "PLR0913", # too-many-arguments (DI patterns need many args)
+    "PLR2004", # magic-value-comparison (domain constants are OK)
+    "PLR0911", # too-many-return-statements (complex domain logic)
+    "PLR0912", # too-many-branches (validation logic)
+    "PLR0915", # too-many-statements (use cases can be long)
+    
+    # Architecture-specific exceptions
+    "TID252", # relative-imports (we use relative imports within contexts)
+    "INP001", # implicit-namespace-package (__init__.py not always needed)
+    "FBT",    # flake8-boolean-trap (boolean flags are OK in our APIs)
+    "N806",   # non-lowercase-variable-in-function (HTML/CSS constants)
+    "N801",   # invalid-class-name (Stage3_4 is intentional naming)
+    "N818",   # error-suffix-on-exception-name (ReloadAppSignal is not an error)
+    "ARG002", # unused-method-argument (interfaces may require params)
+    "PLC0415", # import-outside-top-level (lazy imports in fixtures are OK)
+    "PLW0603", # global-statement (session state is managed via global)
+    "B008",   # function-call-in-default-argument (typer pattern)
+    "SIM108", # if-else-block-instead-of-if-exp (sometimes more readable)
+    "SIM102", # collapsible-if (sometimes clearer as nested)
+    
+    # Security (not applicable for CLI tools)
+    "S",      # flake8-bandit (security - overkill for this project)
+]
+
+# Allow autofix for these categories
+fixable = ["ALL"]
+unfixable = []
+
+[lint.per-file-ignores]
+# Tests can have many things that production code shouldn't
+"tests/**/*.py" = [
+    "PLR",    # Pylint refactor rules (tests can be verbose)
+    "ARG",    # Unused arguments (fixtures)
+    "N",      # Naming (test names are descriptive, not PEP8)
+]
+
+# __init__.py files often have unused imports (re-exports)
+"__init__.py" = [
+    "F401",   # Unused imports are re-exports
+]
+
+[format]
+# Use ruff format settings
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

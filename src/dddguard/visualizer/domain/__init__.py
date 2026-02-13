@@ -1,43 +1,56 @@
-from .value_objects.visual_primitives import VisualElement, LeafNode, VisualContainer
-from .value_objects.options import VisualizationOptions
-from .value_objects.graph import DependencyGraph, DependencyNode, DependencyLink
-from .aggregates.context_tower_aggregate import ContextTower, TowerZone, ZoneBackground
+# Aggregates
+from .context_tower_aggregate import ContextTower, TowerZone
 
-from .services.zone_builder_service import ZoneBuilderService
-from .services.styling import StyleService, EdgeColorService, EdgeRoutingService
-from .services.placement.node_placement_service import NodePlacementService
-from .services.grouping.node_grouping_service import NodeGroupingService
-from .services.optimization import (
-    OptimizationConfig,
-    ContainerOptimizationService,
-    FlowPackingService,
+# Enums
+from .enums import ZoneKey
+
+# Services (Domain Logic)
+# Pipeline Services (Replaces LayoutCalculatorService)
+from .services import (
+    EdgeColorService,
+    EdgeRoutingService,
+    # Edge Services
+    EdgeTopologyService,
+    GraphGrouperService,
+    StructureBuilderService,
+    TopologyOptimizerService,
+    TowerAssemblerService,
+    ZoneLayoutService,
 )
-from .errors import LayoutCalculationError
+
+# Value Objects
+from .value_objects import (
+    LeafNode,
+    OptimizationConfig,
+    StyleConfig,
+    VisualContainer,
+    VisualElement,
+    VisualizationConfig,
+    ZoneBackground,
+    ZoneLayoutData,
+    style,  # Singleton instance
+)
 
 __all__ = [
-    # Primitives
-    "VisualElement",
-    "LeafNode",
-    "VisualContainer",
-    "VisualizationOptions",
-    # Graph
-    "DependencyGraph",
-    "DependencyNode",
-    "DependencyLink",
-    # Aggregates
     "ContextTower",
-    "TowerZone",
-    "ZoneBackground", 
-    # Services
-    "ZoneBuilderService",
-    "StyleService",
     "EdgeColorService",
     "EdgeRoutingService",
-    "NodePlacementService",
-    "NodeGroupingService",
+    "EdgeTopologyService",
+    # Services
+    "GraphGrouperService",
+    "LeafNode",
     "OptimizationConfig",
-    "ContainerOptimizationService",
-    "FlowPackingService",
-    # Errors
-    "LayoutCalculationError",
+    "StructureBuilderService",
+    "StyleConfig",
+    "TopologyOptimizerService",
+    "TowerAssemblerService",
+    "TowerZone",
+    "VisualContainer",
+    "VisualElement",
+    "VisualizationConfig",
+    "ZoneBackground",
+    "ZoneKey",
+    "ZoneLayoutData",
+    "ZoneLayoutService",
+    "style",
 ]

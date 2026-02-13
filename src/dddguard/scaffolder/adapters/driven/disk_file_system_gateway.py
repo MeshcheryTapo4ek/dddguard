@@ -18,11 +18,10 @@ class DiskFileSystemGateway(IFileSystemGateway):
             if not full_path.parent.exists():
                 full_path.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(full_path, "w", encoding="utf-8") as f:
-                f.write(file_vo.content)
+            full_path.write_text(file_vo.content, encoding="utf-8")
 
         except Exception as e:
             raise ScaffolderAppError(
                 message=f"IO Error writing config to {file_vo.path}: {e}",
-                original_error=e
+                original_error=e,
             ) from e

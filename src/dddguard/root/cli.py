@@ -1,49 +1,49 @@
-import typer
+import sys
+import traceback
 from pathlib import Path
-from rich.console import Console
+
+import typer
 
 # --- UI IMPORTS ---
 from InquirerPy.base.control import Choice
 from InquirerPy.separator import Separator
 
-# Shared Infrastructure
-from dddguard.shared import (
-    render_dashboard,
-    ask_select,
-    YamlConfigLoader,
-    safe_execution,
-    ROOT_THEME,
+from dddguard.linter.adapters.driving import (
+    run_lint_directory_flow,
+    run_lint_project_flow,
+)
+from dddguard.linter.provider import LinterContainer
+from dddguard.scaffolder.provider import ScaffolderContainer
+
+# --- Import FLOWS ---
+from dddguard.scanner.adapters.driving import (
+    get_last_scan_options,
+    run_classify_directory_flow,
+    run_classify_project_flow,
+    run_repeat_last_scan_flow,
+    run_scan_directory_flow,
+    run_scan_project_flow,
 )
 
 # --- Dependency Injection ---
-from dddguard.scanner import ScannerContainer
-from dddguard.scaffolder import ScaffolderContainer
-from dddguard.linter import LinterContainer
-from dddguard.visualizer import VisualizerContainer
+from dddguard.scanner.provider import ScannerContainer
+from dddguard.shared.adapters.driven.yaml_config_loader import YamlConfigLoader
+
+# Shared Infrastructure
+from dddguard.shared.adapters.driving import (
+    ROOT_THEME,
+    tui,
+)
+from dddguard.visualizer.adapters.driving import (
+    run_viz_directory_flow,
+    run_viz_project_flow,
+)
+from dddguard.visualizer.provider import VisualizerContainer
 
 from .composition import build_app_container
 
-# --- Import FLOWS from Adapters ---
-from dddguard.scanner.adapters.driving import (
-    run_scan_project_flow,
-    run_scan_directory_flow,
-    run_classify_project_flow,
-    run_classify_directory_flow,
-    run_repeat_last_scan_flow, 
-    get_last_scan_options, 
-)
-from dddguard.linter.adapters.driving import (
-    run_lint_project_flow,
-    run_lint_directory_flow,
-)
-from dddguard.visualizer.adapters.driving import (
-    run_viz_project_flow,
-    run_viz_directory_flow
-)
-
-console = Console()
 app = typer.Typer(
-    help="DDDGuard: Architecture Guard & Linter for DDD projects.",
+    help="DDDGuard: Architecture Guard & Linter & Scanner for DDD projects.",
     no_args_is_help=False,
     invoke_without_command=True,
 )
@@ -66,29 +66,33 @@ def _interactive_menu_loop() -> None:
             _interactive_menu(container)
             break
         except ReloadAppSignal:
-            console.print("[yellow]↻ Reloading Configuration...[/]", style="dim")
+            tui.console.print("[yellow]↻ Reloading Configuration...[/]", style="dim")
             continue
         except Exception:
-            # Catch errors during container build or menu loop
-            console.print("\n[bold red]❌ Critical Application Error[/bold red]")
-            console.print_exception(show_locals=False)
+            tui.console.print("\n[bold red]Critical Application Error[/bold red]")
+            tui.console.print_exception(show_locals=False)
+            traceback.print_exc(file=sys.stderr)
+            tui.console.print(
+                "[dim]Report at: [link]https://github.com/MeshcheryTapo4ek/dddguard/issues[/][/]"
+            )
             break
 
 
 def _interactive_menu(container) -> None:
-    # Retrieve Controllers/Facades from DI
-    scanner_ctrl = container.get(ScannerContainer).controller
-    scaffolder_ctrl = container.get(ScaffolderContainer).controller
-    linter_ctrl = container.get(LinterContainer).controller
-    visualizer_ctrl = container.get(VisualizerContainer).controller
+    # Retrieve facades
+    scanner_ctrl = container.get(ScannerContainer).facade
+    scaffolder_ctrl = container.get(ScaffolderContainer).facade
+    linter_ctrl = container.get(LinterContainer).facade
+    visualizer_ctrl = container.get(VisualizerContainer).facade
 
     loader = YamlConfigLoader()
+    tui.set_theme(ROOT_THEME)
 
     def item(label: str, desc: str) -> str:
         return f"{label:<20} {desc}"
 
     while True:
-        console.clear()
+        tui.clear()
         config_path = loader._discover_config_file()
         config_exists = config_path is not None
 
@@ -97,24 +101,30 @@ def _interactive_menu(container) -> None:
         else:
             current_config = scanner_ctrl.config
 
-        render_dashboard(
-            current_config, config_path, theme=ROOT_THEME, show_context=False
+        # RENDER DASHBOARD VIA TUI
+        root = current_config.project.project_root
+        src = getattr(current_config.project, "source_dir", "src")
+
+        dashboard_data = {
+            "Project": root.name if root else "N/A",
+            "Source": src,
+            "Config": config_path.name if config_path else "None",
+        }
+
+        tui.dashboard(
+            title="DDDGuard Architecture Suite",
+            subtitle=f"Context: {ROOT_THEME.name}",
+            data=dashboard_data,
         )
 
-        choices = []
-        
-        # --- DYNAMIC HISTORY CHECK (In-Memory) ---
+        choices: list[Choice | Separator] = []
+
+        # --- DYNAMIC HISTORY CHECK ---
         last_scan = get_last_scan_options()
         if last_scan:
             target_name = last_scan.target_path.name
-            choices.append(
-                Choice(
-                    "REPEAT_SCAN", 
-                    f"0. Repeat Scan:       {target_name}/"
-                )
-            )
+            choices.append(Choice("REPEAT_SCAN", f"0. Repeat Scan:       {target_name}/"))
             choices.append(Separator())
-        # -----------------------------
 
         if config_exists:
             choices.extend(
@@ -150,9 +160,7 @@ def _interactive_menu(container) -> None:
             choices.extend(
                 [
                     Separator(" SETUP "),
-                    Choice(
-                        "INIT_CONFIG", item("Create Config", "Generate config.yaml")
-                    ),
+                    Choice("INIT_CONFIG", item("Create Config", "Generate config.yaml")),
                     Separator(" AD-HOC TOOLS "),
                     Choice(
                         "CLASSIFY_DIR",
@@ -166,24 +174,22 @@ def _interactive_menu(container) -> None:
 
         choices.extend([Separator(), Choice("EXIT", "Exit")])
 
-        action = ask_select(
+        action = tui.select(
             message=None,
             choices=choices,
-            theme=ROOT_THEME,
-            instruction="(Use arrow keys to navigate)",
         )
 
         if action == "EXIT" or action is None:
-            console.print("\n[yellow]Goodbye! 👋[/]")
+            tui.console.print("\n[yellow]Goodbye! 👋[/]")
             return
 
-        try:
-            console.print()
-            
-            # --- ACTION DISPATCH ---
+        tui.console.print()
+
+        # --- ACTION DISPATCH (wrapped in error_boundary) ---
+        with tui.error_boundary():
             if action == "REPEAT_SCAN":
                 run_repeat_last_scan_flow(scanner_ctrl)
-            
+
             elif action == "SCAN_PROJECT":
                 run_scan_project_flow(scanner_ctrl)
             elif action == "CLASSIFY_PROJECT":
@@ -193,73 +199,47 @@ def _interactive_menu(container) -> None:
             elif action == "CLASSIFY_DIR":
                 run_classify_directory_flow(scanner_ctrl)
 
-            # --- LINTER ACTIONS ---
             elif action == "LINT_PROJECT":
                 run_lint_project_flow(linter_ctrl)
             elif action == "LINT_DIR":
                 run_lint_directory_flow(linter_ctrl)
 
-            # --- VISUALIZER ACTIONS ---
             elif action == "VIZ_PROJECT":
                 run_viz_project_flow(visualizer_ctrl, current_config)
             elif action == "VIZ_DIR":
                 run_viz_directory_flow(visualizer_ctrl, current_config)
 
-            # --- SCAFFOLDER ACTIONS ---
             elif action == "INIT_CONFIG":
                 target_path = Path.cwd()
-                with safe_execution("Initializing Configuration..."):
+                with tui.spinner("Initializing Configuration..."):
                     response = scaffolder_ctrl.init_project(target_path)
 
                 if response.success:
-                    console.print(f"[green]✅ {response.message}[/]")
-                    console.print(f"    Config: [bold white]{response.config_path}[/]")
-                    console.print("\n[dim]Reloading menu...[/]")
+                    tui.success(response.message, {"Config": str(response.config_path)})
+                    tui.console.print("\n[dim]Reloading menu...[/]")
                 else:
-                    console.print(f"[bold red]❌ {response.message}[/]")
-                    if response.error_details:
-                        console.print(f"    Details: {response.error_details}")
-                    console.input("[dim]Press Enter to continue...[/]")
-
-        except KeyboardInterrupt:
-            console.print("\n[yellow]Action cancelled.[/]")
-        except Exception:
-            # --- IMPROVED ERROR CATCHING ---
-            console.print("\n[bold red]❌ Unexpected Error:[/bold red]")
-            # This prints the stack trace nicely using Rich
-            console.print_exception(show_locals=False) 
-            console.print()
-            console.input("[dim]Press Enter to return to menu...[/]")
+                    tui.error(response.message, response.error_details)
+                    tui.pause()
 
 
 def main() -> None:
-    """Application entry point for CLI command registration."""
-    # We moved container build inside the interactive loop or individual commands
-    # to handle reloading gracefully.
-    
-    # Register Scanner Commands
     try:
         container = build_app_container()
         scanner = container.get(ScannerContainer)
         scanner.register_commands(app)
-
-        # Register Scaffolder Commands
         scaffolder = container.get(ScaffolderContainer)
         scaffolder.register_commands(app)
-
-        # Register Linter Commands
         linter = container.get(LinterContainer)
         linter.register_commands(app)
-        
-        # Register Visualizer Commands
         visualizer = container.get(VisualizerContainer)
         visualizer.register_commands(app)
 
         app(obj={"container": container})
-        
+
     except Exception:
-        console.print("[bold red]❌ Fatal Startup Error[/bold red]")
-        console.print_exception()
+        tui.console.print("[bold red]Fatal Startup Error[/bold red]")
+        tui.console.print_exception()
+        traceback.print_exc(file=sys.stderr)
 
 
 if __name__ == "__main__":

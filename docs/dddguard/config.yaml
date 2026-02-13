@@ -3,11 +3,6 @@ project:
   source_dir: "src/dddguard"
   tests_dir: "tests"
   docs_dir: "docs"
-  
-  macro_contexts:
-    scanner: "scanner"
-
-
     
 scanner:
   # Directories to completely exclude from scanning
@@ -25,7 +20,4 @@ scanner:
 
   # Specific files to ignore during analysis
   ignore_files:
-    - "conftest.py"
-    - "manage.py"
-    - "setup.py"
-    - "__main__.py"
+    - "12312312312_example.py"

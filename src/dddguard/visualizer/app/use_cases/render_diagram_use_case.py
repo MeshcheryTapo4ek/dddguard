@@ -1,10 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
-from ...domain import ContextTower, VisualizationOptions
-
-from ...app import RenderingError, IDiagramRenderer
+from ...app import IDiagramRenderer, RenderingError
+from ...domain import ContextTower, VisualizationConfig
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -17,8 +15,13 @@ class RenderDiagramUseCase:
 
     renderer: IDiagramRenderer
 
-    def execute(self, towers: List[ContextTower], output_path: Path, options: VisualizationOptions) -> None:
+    def execute(
+        self,
+        towers: list[ContextTower],
+        output_path: Path,
+        option: VisualizationConfig,
+    ) -> None:
         try:
-            self.renderer.render(towers, output_path, options)
+            self.renderer.render(towers, output_path, option)
         except Exception as e:
             raise RenderingError(str(output_path), original_error=e) from e

@@ -1,29 +1,34 @@
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from functools import cached_property
 from pathlib import Path
-from typing import List, Optional
-
-
-@dataclass(frozen=True, kw_only=True, slots=True)
-class SourceFileVo:
-    path: Path
-    content: str
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class ImportedModuleVo:
+    """
+    Specific to Detection: Detail about a specific import statement line in AST.
+    """
+
     module_path: str
     lineno: int
     is_relative: bool
-    imported_names: List[str] = field(default_factory=list)
+    imported_names: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class ScannedModuleVo:
+    """
+    Intermediate VO holding AST parsing results before Graph construction.
+    Acts as a temporary holder/DTO within the Use Case scope.
+    """
+
     logical_path: str
     file_path: Path
-    content: str
-    raw_imports: List[ImportedModuleVo] = field(default_factory=list)
+
+    # Content is Optional for cases where file read failed or it is a binary asset
+    content: str | None
+
+    raw_imports: Sequence[ImportedModuleVo] = field(default_factory=tuple)
 
     @property
     def is_package(self) -> bool:
@@ -31,55 +36,19 @@ class ScannedModuleVo:
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
-class DependencyLink:
-    source_module: str
-    target_module: str
-    imported_symbols: List[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True, kw_only=True) # Removed slots=True for caching
-class ScanStatisticsVo:
-    total_files: int
-    total_modules: int
-    total_relations: int
-
-    @cached_property
-    def relations_per_module(self) -> float:
-        """Example of a cached metric."""
-        if self.total_modules == 0:
-            return 0.0
-        return round(self.total_relations / self.total_modules, 2)
-
-
-@dataclass(frozen=True)
-class ScanResult:
-    graph: "DependencyGraph"
-    source_tree: dict
-    stats: ScanStatisticsVo
-
-
-@dataclass(frozen=True, kw_only=True, slots=True)
-class PathFilter:
+class SourceFileVo:
     """
-    Encapsulates logic for filtering files based on scope/focus.
-    Replaces loose 'focus_path' and 'include_paths' arguments.
-    """
-    focus_path: Path
-    include_paths: Optional[List[Path]] = None
+    Foundations: Physical file content representation.
 
-    def is_relevant(self, file_path: Path) -> bool:
-        """
-        Determines if a physical file path is part of the current analysis scope.
-        """
-        # 1. Must be within the main focus path
-        # Convert to str for fast prefix checking (faster than pathlib.is_relative_to in loops)
-        f_path_str = str(file_path)
-        
-        if not f_path_str.startswith(str(self.focus_path)):
-            return False
-        
-        # 2. If allow-list is present, must match at least one
-        if self.include_paths:
-            return any(f_path_str.startswith(str(inc)) for inc in self.include_paths)
-            
-        return True
+    Can represent two states:
+    1. Success: content is str, reading_error is None.
+    2. Failure: content is None, reading_error contains the exception message.
+    """
+
+    path: Path
+    content: str | None = None
+    reading_error: str | None = None
+
+    @property
+    def is_readable(self) -> bool:
+        return self.content is not None and self.reading_error is None

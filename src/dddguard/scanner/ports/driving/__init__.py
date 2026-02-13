@@ -1,8 +1,7 @@
-from .scanner_controller import ScannerController
-from .response_schema import ScanResponseSchema, ClassifiedNodeSchema
+from .scanner_facade import ContextListSchema, ContextNodeSchema, ScannerFacade
 
 __all__ = [
-    "ScannerController",
-    "ScanResponseSchema",
-    "ClassifiedNodeSchema",
+    "ContextListSchema",
+    "ContextNodeSchema",
+    "ScannerFacade",
 ]

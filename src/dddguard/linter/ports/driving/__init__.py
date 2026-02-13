@@ -1,10 +1,18 @@
-from .controller import LinterController
-from .schemas import LinterResponseSchema, ViolationSchema
-from .errors import LinterPortError
+from .facade import LinterFacade, LinterPortError
+from .schemas import (
+    FractalRulesSchema,
+    LinterResponseSchema,
+    RulesMatrixSchema,
+    Severity,
+    ViolationSchema,
+)
 
 __all__ = [
-    "LinterController",
-    "LinterResponseSchema",
-    "ViolationSchema",
+    "FractalRulesSchema",
+    "LinterFacade",
     "LinterPortError",
+    "LinterResponseSchema",
+    "RulesMatrixSchema",
+    "Severity",
+    "ViolationSchema",
 ]

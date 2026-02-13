@@ -1,79 +1,79 @@
-Принято. Я зафиксирую правила игры и структуру в едином спецификационном блоке. Это будет наш «чертеж», по которому мы будем строить слайды.
+Accepted. I will fix the rules of the game and structure in a single specification block. This will be our «blueprint» that we will use to build the slides.
 
-Я определил цветовую кодировку на основе твоих требований и стандарта dddguard.
+I have defined the color encoding based on your requirements and the dddguard standard.
 
-<macro_layout> Дизайн-система презентации:
+<macro_layout> Presentation Design System:
 
-Цветовая палитра (Semantic Coloring):
+Color Palette (Semantic Coloring):
 
-🔵 Domain Layer: #3B82F6 (Blue-500) — Чистая логика, холодный рассудок.
+🔵 Domain Layer: #3B82F6 (Blue-500) — Pure logic, cold reason.
 
-🟣 App Layer: #A855F7 (Purple-500) — Оркестрация, магия соединения.
+🟣 App Layer: #A855F7 (Purple-500) — Orchestration, the magic of connections.
 
-🟢 Driving Side (Inbound): #22C55E (Green-500) — Входящие сигналы, "Зеленый свет" для старта.
+🟢 Driving Side (Inbound): #22C55E (Green-500) — Incoming signals, "green light" for start.
 
 Scope: Driving Ports, Driving DTO, Driving Adapters.
 
-🟠 Driven Side (Outbound): #F97316 (Orange-500) — Исходящие побочные эффекты, предупреждение.
+🟠 Driven Side (Outbound): #F97316 (Orange-500) — Outgoing side effects, warning.
 
 Scope: Driven Ports, Driven DTO, Driven Adapters.
 
-⚪ Shared Kernel: #94A3B8 (Slate-400) — База, нейтральность.
+⚪ Shared Kernel: #94A3B8 (Slate-400) — Base, neutrality.
 
-🔴 Root: #E11D48 (Rose-600) — Сборка, точка входа.
+🔴 Root: #E11D48 (Rose-600) — Composition, entry point.
 
-Типографика:
+Typography:
 
-Заголовки: Крупные, жирные, без засечек.
+Headings: Large, bold, sans-serif.
 
-Акценты: Использование цветных спанов (e.g., <span class="text-blue-500">Domain</span>).
+Accents: Use colored spans (e.g., <span class="text-blue-500">Domain</span>).
 
-Код: Моноширинный, фокус на строках.
+Code: Monospace, focus on lines.
 
 </macro_layout>
 
-Вот утвержденный план в формате Markdown-спецификации:
+Here is the approved plan in Markdown specification format:
 
 <slide_block language="md">
 
-I. Введение: Хаос против Порядка
-Титульный слайд (Intro).
+I. Introduction: Chaos vs Order
+Title slide (Intro).
 
-Проблема:
+Problem:
 
-Хаос в проектах, разные структуры, споры на Code Review.
+Chaos in projects, different structures, Code Review disputes.
 
-Сложность онбординга и поддержки.
+Difficult onboarding and maintenance.
 
-Решение:
+Solution:
 
-Архитектура как строгий контракт.
+Architecture as a strict contract.
 
-Единообразие через инструменты.
+Consistency through tools.
 
-II. Макро-уровень: Глобальная карта
-Триединство: Root + Shared + Bounded Contexts.
+II. Macro Level: Global Map
+Trinity: Root + Shared + Bounded Contexts.
 
-Иерархия (Схема Mermaid):
+Hierarchy (Mermaid Diagram):
 
 Shared (Base) -> Contexts (Logic) -> Root (Composition).
 
-Объяснение направлений зависимостей.
+Explanation of dependency directions.
 
-Детальный разбор компонентов:
+Detailed component breakdown:
 
-Root (Сборка всего).
+Root (Assembly of everything).
 
-Shared Kernel (Стабильность, VO, DTO).
+Shared Kernel (Stability, VO, DTO).
 
-Bounded Context (Изоляция).
+Bounded Context (Isolation).
 
-III. Микро-уровень: Анатомия Контекста
-Поток данных (Схема Mermaid):
+III. Micro Level: Context Anatomy
+Data flow (Mermaid Diagram):
 
-Port -> DTO -> Adapter -> App -> Domain (и обратно).
+Port -> DTO -> Adapter -> App -> Domain (and back).
 
-Слой 1: Domain (Ядро) [Blue]
+Layer 1: Domain (Core) [Blue]
 
 Entities.
 
@@ -85,7 +85,7 @@ Domain Services.
 
 Domain Errors.
 
-Слой 2: App (Оркестрация) [Purple]
+Layer 2: App (Orchestration) [Purple]
 
 Use Cases.
 
@@ -93,13 +93,13 @@ Queries.
 
 Commands.
 
-Общий обзор слоя.
+Layer overview.
 
-Развилка: Driving vs Driven
+Fork: Driving vs Driven
 
-Концепция "Кто кого толкает".
+Concept "Who pushes whom".
 
-Ветка Driven (Исходящие) [Orange]
+Driven Branch (Outgoing) [Orange]
 Driven Adapters:
 
 Repositories.
@@ -110,14 +110,14 @@ Publishers.
 
 ACL (Anti-Corruption Layer).
 
-Driven DTO: Контракты ответа/события.
+Driven DTO: Response/event contracts.
 
-Driven Ports: Инфраструктура (DB Drivers, Clients).
+Driven Ports: Infrastructure (DB Drivers, Clients).
 
-Ветка Driving (Входящие) [Green]
-Driving Ports: Инфраструктура (Web Server, CLI).
+Driving Branch (Incoming) [Green]
+Driving Ports: Infrastructure (Web Server, CLI).
 
-Driving DTO: Контракты запроса.
+Driving DTO: Request contracts.
 
 Driving Adapters: Controllers, Consumers.
 
@@ -127,18 +127,18 @@ Wiring (composition.py).
 
 Container (DI).
 
-IV. Инструментарий: dddguard
-Переход: "Сложно руками? Guard поможет".
+IV. Tooling: dddguard
+Transition: "Hard to do by hand? Guard will help".
 
-Scan & Draw: Визуализация графа зависимостей.
+Scan & Draw: Visualization of the dependency graph.
 
-Lint: Матрица правил и защита слоев.
+Lint: Rules matrix and layer protection.
 
-Create: Scaffolder и генерация структуры.
+Create: Scaffolder and structure generation.
 
-V. Заключение
-Итог: Architecture as Code.
+V. Conclusion
+Summary: Architecture as Code.
 
-Контакты/QR. </slide_block>
+Contacts/QR. </slide_block>
 
-<refine> План зафиксирован. Мы идем от боли к макро-структуре, затем ныряем в микро-структуру (Domain -> App -> Driven -> Driving -> Wiring), и заканчиваем инструментом.
+<refine> Plan finalized. We go from pain to macro-structure, then dive into micro-structure (Domain -> App -> Driven -> Driving -> Wiring), and finish with the tool.

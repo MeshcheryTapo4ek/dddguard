@@ -1,37 +1,19 @@
-from .errors import (
-    ImportParsingError,
-)
 from .ast_import_parser_service import AstImportParserService
+from .errors import ImportParsingError
 from .module_resolution_service import ModuleResolutionService
-from .dependency_expansion_service import DependencyExpansionService
+from .recursive_import_resolver_service import RecursiveImportResolverService
 from .value_objects import (
-    SourceFileVo,
-    ScannedModuleVo,
     ImportedModuleVo,
-    ScanResult,
-    PathFilter
-)
-from .entities import (
-    DependencyGraph,
-    DependencyNode,
-    DependencyLink,
-    ProjectStructureTree,
+    ScannedModuleVo,
+    SourceFileVo,
 )
 
 __all__ = [
-    "ImportParsingError",
-    "ModuleResolutionError",
-    "DependencyExpansionError",
     "AstImportParserService",
-    "ModuleResolutionService",
-    "DependencyExpansionService",
-    "SourceFileVo",
-    "ScannedModuleVo",
+    "ImportParsingError",
     "ImportedModuleVo",
-    "ScanResult",
-    "PathFilter",
-    "DependencyGraph",
-    "DependencyNode",
-    "DependencyLink",
-    "ProjectStructureTree",
+    "ModuleResolutionService",
+    "RecursiveImportResolverService",
+    "ScannedModuleVo",
+    "SourceFileVo",
 ]
